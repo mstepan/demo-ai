@@ -14,3 +14,8 @@
 ```
 
 
+## Logo
+
+Logo generated using [patorjk](https://patorjk.com/software/taag) and `Standard` style.
+
+
