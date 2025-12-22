@@ -30,16 +30,26 @@ spring:
   #                        Region.US_CHICAGO_1,
   #                        OciAuthType.SESSION_TOKEN,
   #                        "bmc_operator_access"));
+
+  # oci session authenticate --region us-chicago-1 --profile-name bmc_operator_access
   ai:
     oci:
-      region: us-chicago-1
       genai:
-        chat:
-          options:
-            compartment: ocid1.tenancy.oc1..aaaaaaaaqkcilbifc6tm4wlnefa2ofmazjqgdhodaqtsgrnrbbenkahkf62a
-            model: meta.llama-4-maverick-17b-128e-instruct-fp8
-            servingMode: on-demand
+        # https://docs.spring.io/spring-ai/reference/api/chat/oci-genai/cohere-chat.html#_connection_properties
+        region: us-chicago-1
         authenticationType: file
+        tenantId: ocid1.tenancy.oc1..aaaaaaaaqkcilbifc6tm4wlnefa2ofmazjqgdhodaqtsgrnrbbenkahkf62a # ugbuocinative
+        profile: bmc_operator_access
+        # https://docs.spring.io/spring-ai/reference/api/chat/oci-genai/cohere-chat.html#_configuration_properties
+        cohere:
+          chat:
+            options:
+              model:  #meta.llama-4-maverick-17b-128e-instruct-fp8
+              compartment: ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa # ugbuocinative (root)/CEGBU-Textura
+              servingMode: on-demand
+
+
+              
 
 server:
   port: 7171

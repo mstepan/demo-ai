@@ -4,7 +4,6 @@ import com.github.mstepan.demo_ai.service.ChatService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.lang.invoke.MethodHandles;
@@ -23,9 +22,7 @@ public class AskController {
         this.chatService = chatService;
     }
 
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    @RequestMapping("/ask")
+    @PostMapping(path = "/ask", produces = "application/json")
     public Answer askChat(@Valid @RequestBody Question question) {
         LOGGER.info("ask LLM question {}", question.question());
 
