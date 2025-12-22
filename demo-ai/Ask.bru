@@ -1,0 +1,17 @@
+meta {
+  name: Ask
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{BASE_URL}}/ask
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "question": "hello"
+  }
+}

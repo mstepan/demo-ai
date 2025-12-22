@@ -1,0 +1,29 @@
+package com.github.mstepan.demo_ai.web;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.lang.invoke.MethodHandles;
+
+import javax.validation.Valid;
+
+@RestController
+public class AskController {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @RequestMapping("/ask")
+    public Answer askChat(@Valid @RequestBody Question question) {
+        LOGGER.info("ask LLM question {}", question.question());
+        return new Answer("not implemented");
+    }
+
+
+}
+

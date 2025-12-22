@@ -1,0 +1,65 @@
+# Application configuration
+# Avoid hardcoding secrets; prefer environment variables with defaults (e.g., ${VAR:default})
+
+spring:
+  application:
+    name: demo-ai
+  jackson:
+    time-zone: UTC
+    serialization:
+      indent-output: false
+  # OCI Generative AI configuration example (uncomment and provide values as needed)
+  #     // https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm
+  #    // google.gemini-2.5-pro <-- not-working (in beta)
+  #    // xai.grok-4
+  #    // meta.llama-3.2-90b-vision-instruct
+  #    // meta.llama-4-scout-17b-16e-instruct
+  #    // meta.llama-4-maverick-17b-128e-instruct-fp8 <-- best so far
+  #    private static final String LLM_MODEL_ID = "meta.llama-4-maverick-17b-128e-instruct-fp8";
+  #
+  #         /*
+  #         * tenancy and compartment: ugbuocinative/CEGBU-Textura
+  #         * region: us-chicago-1
+  #         */
+  #        OCI_ENVIRONMENTS.put(
+  #                "dev",
+  #                new OciEnv(
+  #                        "ugbuocinative",
+  #                        "ocid1.tenancy.oc1..aaaaaaaaqkcilbifc6tm4wlnefa2ofmazjqgdhodaqtsgrnrbbenkahkf62a",
+  #                        Region.US_CHICAGO_1,
+  #                        OciAuthType.SESSION_TOKEN,
+  #                        "bmc_operator_access"));
+  ai:
+    oci:
+      region: ${OCI_REGION:us-chicago-1}
+      genai:
+#        endpoint: ${OCI_GENAI_ENDPOINT:}
+        model-id: ${OCI_GENAI_MODEL_ID:meta.llama-4-maverick-17b-128e-instruct-fp8}
+      auth:
+        type: config-file  # options: default, resource-principal, instance-principal, config-file
+
+
+server:
+  port: 7171
+  shutdown: graceful
+  http2:
+    enabled: true
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/xml
+    min-response-size: 1024
+
+logging:
+  level:
+    root: INFO
+    org.springframework: INFO
+    org.springframework.web: INFO
+    com.github.mstepan: INFO
+
+info:
+  app:
+    name: demo-ai
+    description: Demo AI Spring Boot Project + OCI and Oracle 23ai DB
+    version: ${APP_VERSION:0.0.1-SNAPSHOT}
+
+
