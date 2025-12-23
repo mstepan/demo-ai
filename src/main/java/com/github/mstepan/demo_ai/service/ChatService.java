@@ -7,7 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.lang.invoke.MethodHandles;
 
@@ -29,6 +31,14 @@ public class ChatService {
     }
 
     public Flux<String> streamAnswer(Question question) {
-        return chatClient.prompt().user(question.question()).stream().content();
+        // Stream directly using the primary ChatClient (backed by OCIChatModel which implements StreamingChatModel)
+        return chatClient
+                .prompt()
+                .user(question.question())
+                .stream()
+                .content()
+                // Run the blocking OCI stream reading on a bounded elastic thread,
+                // so the servlet request thread is not blocked and SSE can flush per chunk.
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

@@ -1,5 +1,6 @@
 package com.github.mstepan.demo_ai.oci;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oracle.bmc.ClientConfiguration;
 import com.oracle.bmc.auth.SessionTokenAuthenticationDetailsProvider;
@@ -15,12 +16,17 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import reactor.core.publisher.Flux;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
+import reactor.core.publisher.Flux;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.invoke.MethodHandles;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Primary
@@ -157,16 +163,271 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
         return Flux.create(sink -> {
-            try {
-                // Temporary streaming implementation: emit once using the non-streaming call.
-                // TODO: Switch to true OCI SSE streaming by setting .isStream(true) and using the streaming endpoint.
-                ChatResponse response = call(prompt);
-                sink.next(response);
-                sink.complete();
+            try (GenerativeAiInferenceClient client = newClient()) {
+                // Build messages (same as non-streaming)
+                SystemMessage systemPrompt =
+                        SystemMessage.builder()
+                                .content(
+                                        List.of(
+                                                TextContent.builder()
+                                                        .text(prompt.getSystemMessage().getText())
+                                                        .build()))
+                                .build();
+
+                UserMessage userQuery =
+                        UserMessage.builder()
+                                .content(
+                                        List.of(
+                                                TextContent.builder()
+                                                        .text(prompt.getUserMessage().getText())
+                                                        .build()))
+                                .build();
+
+                // Enable streaming
+                GenericChatRequest genericChatRequest =
+                        GenericChatRequest.builder()
+                                .messages(List.of(systemPrompt, userQuery))
+                                .temperature(0.0)
+                                .topK(1)
+                                .isEcho(false)
+                                .isStream(true)
+                                .build();
+
+                ChatDetails chatDetails =
+                        ChatDetails.builder()
+                                .compartmentId(properties.compartment())
+                                .servingMode(
+                                        OnDemandServingMode.builder()
+                                                .modelId(properties.model())
+                                                .build())
+                                .chatRequest(genericChatRequest)
+                                .build();
+
+                ChatRequest chatRequest = ChatRequest.builder().chatDetails(chatDetails).build();
+
+                /* Invoke client - when isStream(true), the SDK may expose an InputStream of SSE events */
+                var genericResponse = client.chat(chatRequest);
+
+                InputStream is = null;
+                try {
+                    var m = genericResponse.getClass().getMethod("getInputStream");
+                    Object streamObj = m.invoke(genericResponse);
+                    if (streamObj instanceof InputStream) {
+                        is = (InputStream) streamObj;
+                    }
+                } catch (NoSuchMethodException ignore) {
+                    // SDK may not have getInputStream; fallback handled below
+                } catch (Exception reflectEx) {
+                    LOGGER.warn("Failed to obtain streaming InputStream via reflection", reflectEx);
+                }
+
+                if (is == null) {
+                    // Fallback to non-streaming: call once, then emit chunks to simulate streaming
+                    // Build a non-streaming request and parse the final text
+                    GenericChatRequest nonStreamReq =
+                            GenericChatRequest.builder()
+                                    .messages(List.of(systemPrompt, userQuery))
+                                    .temperature(0.0)
+                                    .topK(1)
+                                    .isEcho(false)
+                                    .isStream(false)
+                                    .build();
+
+                    ChatDetails nonStreamDetails =
+                            ChatDetails.builder()
+                                    .compartmentId(properties.compartment())
+                                    .servingMode(
+                                            OnDemandServingMode.builder()
+                                                    .modelId(properties.model())
+                                                    .build())
+                                    .chatRequest(nonStreamReq)
+                                    .build();
+
+                    ChatRequest nonStreamChatRequest = ChatRequest.builder().chatDetails(nonStreamDetails).build();
+
+                    var nonStreamResponse = client.chat(nonStreamChatRequest);
+
+                    String finalText = "";
+                    if (nonStreamResponse instanceof com.oracle.bmc.generativeaiinference.responses.ChatResponse r) {
+                        if (r.getChatResult().getChatResponse() instanceof GenericChatResponse gr) {
+                            List<ChatChoice> choices = gr.getChoices();
+                            if (choices != null && !choices.isEmpty()) {
+                                List<ChatContent> content = choices.getFirst().getMessage().getContent();
+                                if (content != null && !content.isEmpty() && content.getFirst() instanceof TextContent tc) {
+                                    finalText = tc.getText();
+                                }
+                            }
+                        }
+                    }
+
+                    if (finalText == null) {
+                        finalText = "";
+                    }
+
+                    // Emit in small chunks to the client
+                    int chunkSize = 32;
+                    for (int i = 0; i < finalText.length(); i += chunkSize) {
+                        String part = finalText.substring(i, Math.min(finalText.length(), i + chunkSize));
+                        AssistantMessage partial = new AssistantMessage(part);
+                        sink.next(
+                                ChatResponse.builder()
+                                        .generations(List.of(new Generation(partial)))
+                                        .build());
+                    }
+                    sink.complete();
+                    return;
+                }
+
+                try (InputStream autoClose = is;
+                     BufferedReader br = new BufferedReader(new InputStreamReader(autoClose, StandardCharsets.UTF_8))) {
+
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        if (line.isEmpty()) {
+                            continue;
+                        }
+                        // OCI streams SSE as "data: {json...}"
+                        if (!line.startsWith("data:")) {
+                            continue;
+                        }
+                        String data = line.substring("data:".length()).trim();
+                        if (data.isEmpty() || "[DONE]".equalsIgnoreCase(data)) {
+                            continue;
+                        }
+                        try {
+                            JsonNode node = JSON.readTree(data);
+                            String delta = extractDeltaText(node);
+                            if (delta != null && !delta.isEmpty()) {
+                                AssistantMessage partial = new AssistantMessage(delta);
+                                sink.next(
+                                        ChatResponse.builder()
+                                                .generations(List.of(new Generation(partial)))
+                                                .build());
+                            }
+                        } catch (Exception parseEx) {
+                            // Ignore non-JSON SSE payloads
+                        }
+                    }
+
+                    sink.complete();
+                }
             } catch (Exception ex) {
+                LOGGER.error("OCI GenAI streaming call failed", ex);
                 sink.error(ex);
             }
         });
+    }
+
+    private String extractDeltaText(JsonNode node) {
+        if (node == null) {
+            return "";
+        }
+
+        // Handle OpenAI-like shape: choices[].delta/content/message
+        if (node.has("choices") && node.get("choices").isArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonNode choice : node.get("choices")) {
+                if (choice.has("delta")) {
+                    String s = extractDeltaText(choice.get("delta"));
+                    if (!s.isEmpty()) {
+                        sb.append(s);
+                    }
+                }
+                if (choice.has("message")) {
+                    String s = extractDeltaText(choice.get("message"));
+                    if (!s.isEmpty()) {
+                        sb.append(s);
+                    }
+                }
+                if (choice.has("content")) {
+                    String s = extractDeltaText(choice.get("content"));
+                    if (!s.isEmpty()) {
+                        sb.append(s);
+                    }
+                }
+            }
+            if (sb.length() > 0) {
+                return sb.toString();
+            }
+        }
+
+        // Prefer nested delta.* if present
+        if (node.has("delta")) {
+            String s = extractDeltaText(node.get("delta"));
+            if (!s.isEmpty()) {
+                return s;
+            }
+        }
+
+        // Some schemas embed message with content array
+        if (node.has("message")) {
+            String s = extractDeltaText(node.get("message"));
+            if (!s.isEmpty()) {
+                return s;
+            }
+        }
+
+        // Common text-like keys in streaming payloads
+        String[] keys = new String[] {"text", "output_text", "outputText", "deltaText", "output"};
+        for (String k : keys) {
+            if (!node.has(k)) {
+                continue;
+            }
+            JsonNode v = node.get(k);
+            if (v.isTextual()) {
+                return v.asText();
+            }
+            // Fall through for complex shapes; recursive handling below will pick it up
+        }
+
+        // "content" may be a string, array of parts, or object with text
+        if (node.has("content")) {
+            JsonNode c = node.get("content");
+            if (c.isTextual()) {
+                return c.asText();
+            }
+            if (c.isArray()) {
+                StringBuilder sb = new StringBuilder();
+                for (JsonNode item : c) {
+                    String s = extractDeltaText(item);
+                    if (!s.isEmpty()) {
+                        sb.append(s);
+                    }
+                }
+                if (sb.length() > 0) {
+                    return sb.toString();
+                }
+            }
+            if (c.isObject()) {
+                String s = extractDeltaText(c);
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+
+        // Generic recursive scan
+        if (node.isArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonNode item : node) {
+                String s = extractDeltaText(item);
+                if (!s.isEmpty()) {
+                    sb.append(s);
+                }
+            }
+            return sb.toString();
+        }
+        if (node.isObject()) {
+            var it = node.fields();
+            while (it.hasNext()) {
+                var e = it.next();
+                String s = extractDeltaText(e.getValue());
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+        return "";
     }
 
     private GenerativeAiInferenceClient newClient() {
