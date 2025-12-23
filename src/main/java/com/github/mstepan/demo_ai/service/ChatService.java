@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.lang.invoke.MethodHandles;
 
@@ -25,5 +26,9 @@ public class ChatService {
     public Answer askQuestion(Question question) {
         var answerText = chatClient.prompt().user(question.question()).call().content();
         return new Answer(answerText);
+    }
+
+    public Flux<String> streamAnswer(Question question) {
+        return chatClient.prompt().user(question.question()).stream().content();
     }
 }

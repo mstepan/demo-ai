@@ -1,0 +1,17 @@
+meta {
+  name: Ask-streaming
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{BASE_URL}}/ask/stream
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "question": "Write a short haiku about winter"
+  }
+}

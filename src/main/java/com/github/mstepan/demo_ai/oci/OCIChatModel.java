@@ -13,7 +13,9 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.publisher.Flux;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -23,7 +25,7 @@ import java.util.List;
 
 @Primary
 @Component
-public class OCIChatModel implements ChatModel {
+public class OCIChatModel implements ChatModel, StreamingChatModel {
 
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -150,6 +152,21 @@ public class OCIChatModel implements ChatModel {
             LOGGER.error("OCI GenAI call failed", ex);
             return ChatResponse.builder().build();
         }
+    }
+
+    @Override
+    public Flux<ChatResponse> stream(Prompt prompt) {
+        return Flux.create(sink -> {
+            try {
+                // Temporary streaming implementation: emit once using the non-streaming call.
+                // TODO: Switch to true OCI SSE streaming by setting .isStream(true) and using the streaming endpoint.
+                ChatResponse response = call(prompt);
+                sink.next(response);
+                sink.complete();
+            } catch (Exception ex) {
+                sink.error(ex);
+            }
+        });
     }
 
     private GenerativeAiInferenceClient newClient() {
