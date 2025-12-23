@@ -9,47 +9,31 @@ spring:
     serialization:
       indent-output: false
 
-  # OCI Generative AI configuration example (uncomment and provide values as needed)
-  #     // https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm
-  #    // google.gemini-2.5-pro <-- not-working (in beta)
-  #    // xai.grok-4
-  #    // meta.llama-3.2-90b-vision-instruct
-  #    // meta.llama-4-scout-17b-16e-instruct
-  #    // meta.llama-4-maverick-17b-128e-instruct-fp8 <-- best so far
-  #    private static final String LLM_MODEL_ID = "meta.llama-4-maverick-17b-128e-instruct-fp8";
-  #
-  #         /*
-  #         * tenancy and compartment: ugbuocinative/CEGBU-Textura
-  #         * region: us-chicago-1
-  #         */
-  #        OCI_ENVIRONMENTS.put(
-  #                "dev",
-  #                new OciEnv(
-  #                        "ugbuocinative",
-  #                        "ocid1.tenancy.oc1..aaaaaaaaqkcilbifc6tm4wlnefa2ofmazjqgdhodaqtsgrnrbbenkahkf62a",
-  #                        Region.US_CHICAGO_1,
-  #                        OciAuthType.SESSION_TOKEN,
-  #                        "bmc_operator_access"));
-
-  # oci session authenticate --region us-chicago-1 --profile-name bmc_operator_access
+  # OCI Generative AI configuration
   ai:
     oci:
       genai:
-        # https://docs.spring.io/spring-ai/reference/api/chat/oci-genai/cohere-chat.html#_connection_properties
+        # Region where your OCI GenAI endpoint is provisioned
         region: us-chicago-1
+
+        # Use ~/.oci/config (session token profile created with:
+        #   oci session authenticate --region us-chicago-1 --profile-name bmc_operator_access
+        #)
         authenticationType: file
-        tenantId: ocid1.tenancy.oc1..aaaaaaaaqkcilbifc6tm4wlnefa2ofmazjqgdhodaqtsgrnrbbenkahkf62a # ugbuocinative
         profile: bmc_operator_access
-        # https://docs.spring.io/spring-ai/reference/api/chat/oci-genai/cohere-chat.html#_configuration_properties
+        tenantId: ocid1.tenancy.oc1..aaaaaaaaqkcilbifc6tm4wlnefa2ofmazjqgdhodaqtsgrnrbbenkahkf62a
+
+        # Spring AI OCI GenAI Chat configuration (Llama on OCI)
+        # Model catalog: https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm
         cohere:
           chat:
             options:
-              model:  #meta.llama-4-maverick-17b-128e-instruct-fp8
-              compartment: ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa # ugbuocinative (root)/CEGBU-Textura
+              # Meta Llama model on OCI GenAI
+              model: meta.llama-4-maverick-17b-128e-instruct-fp8
+              # Compartment where the on-demand model is accessible
+              compartment: ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa
+              # on-demand or dedicated
               servingMode: on-demand
-
-
-              
 
 server:
   port: 7171
@@ -67,6 +51,8 @@ logging:
     org.springframework: INFO
     org.springframework.web: INFO
     com.github.mstepan: INFO
+    com.oracle.bmc: DEBUG
+    org.springframework.ai.oci: DEBUG
 
 info:
   app:
