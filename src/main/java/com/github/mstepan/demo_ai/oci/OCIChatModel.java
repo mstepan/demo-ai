@@ -28,16 +28,13 @@ public class OCIChatModel implements ChatModel {
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    // https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm
-    // google.gemini-2.5-pro <-- not-working (in beta)
-    // xai.grok-4
-    // meta.llama-3.2-90b-vision-instruct
-    // meta.llama-4-scout-17b-16e-instruct
-    // meta.llama-4-maverick-17b-128e-instruct-fp8 <-- best so far
-    private static final String LLM_MODEL_ID = "meta.llama-4-maverick-17b-128e-instruct-fp8";
+    private final OCIGenAiProperties properties;
+    private static final int DEFAULT_CONNECTION_TIMEOUT_SEC = 10;
+    private static final int DEFAULT_READ_TIMEOUT_SEC = 60;
 
-    private static final int SOCKET_CONNECTION_TIMEOUT_IN_MS = 10_000;
-    private static final int SOCKET_READ_TIMEOUT_IN_MS = 60_000;
+    public OCIChatModel(OCIGenAiProperties properties) {
+        this.properties = properties;
+    }
 
     @Override
     public ChatResponse call(Prompt prompt) {
@@ -81,10 +78,11 @@ public class OCIChatModel implements ChatModel {
             ChatDetails chatDetails =
                     ChatDetails.builder()
                             // ugbuocinative/CEGBU-Textura
-                            .compartmentId(
-                                    "ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa")
+                            .compartmentId(properties.getCompartment())
                             .servingMode(
-                                    OnDemandServingMode.builder().modelId(LLM_MODEL_ID).build())
+                                    OnDemandServingMode.builder()
+                                            .modelId(properties.getModel())
+                                            .build())
                             .chatRequest(genericChatRequest)
                             .build();
 
@@ -103,7 +101,7 @@ public class OCIChatModel implements ChatModel {
                 return ChatResponse.builder().build();
             }
 
-            ChatChoice firstChoice = choices.get(0);
+            ChatChoice firstChoice = choices.getFirst();
 
             List<ChatContent> chatContent = firstChoice.getMessage().getContent();
 
@@ -129,19 +127,30 @@ public class OCIChatModel implements ChatModel {
 
     private GenerativeAiInferenceClient newClient() {
         try {
-            var authProvider = new SessionTokenAuthenticationDetailsProvider("bmc_operator_access");
+            var authProvider =
+                    new SessionTokenAuthenticationDetailsProvider(properties.getProfile());
+
+            int connectionTimeoutSec =
+                    (properties.getConnectionTimeout() != null)
+                            ? properties.getConnectionTimeout()
+                            : DEFAULT_CONNECTION_TIMEOUT_SEC;
+
+            int readTimeoutSec =
+                    (properties.getReadTimeout() != null)
+                            ? properties.getReadTimeout()
+                            : DEFAULT_READ_TIMEOUT_SEC;
 
             var clientConfig =
                     ClientConfiguration.builder()
-                            .connectionTimeoutMillis(SOCKET_CONNECTION_TIMEOUT_IN_MS)
-                            .readTimeoutMillis(SOCKET_READ_TIMEOUT_IN_MS)
+                            .connectionTimeoutMillis(connectionTimeoutSec * 1000)
+                            .readTimeoutMillis(readTimeoutSec * 1000)
                             .build();
 
             var client =
                     GenerativeAiInferenceClient.builder()
                             .configuration(clientConfig)
                             .build(authProvider);
-            client.setRegion(Region.US_CHICAGO_1);
+            client.setRegion(Region.fromRegionId(properties.getRegion()));
             return client;
         } catch (IOException ioEx) {
             throw new IllegalStateException(ioEx);

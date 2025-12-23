@@ -25,6 +25,10 @@ public class AskController {
     @PostMapping(path = "/ask", produces = "application/json")
     public Answer askChat(@Valid @RequestBody Question question) {
         LOGGER.info("ask LLM question {}", question.question());
+        LOGGER.info(
+                "\n\n\n======================================= Thread name {}, virtual: {} ====================================\n\n\n",
+                Thread.currentThread().getName(),
+                Thread.currentThread().isVirtual());
 
         return chatService.askQuestion(question);
     }

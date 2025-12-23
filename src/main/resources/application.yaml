@@ -8,14 +8,26 @@ spring:
     time-zone: UTC
     serialization:
       indent-output: false
-
+#
 # OCI Generative AI configuration
+# For auth we use session token, so don't forget to call:
+#
+# oci session authenticate --region us-ashburn-1 --profile-name bmc_operator_access
+#
 oci:
   genai:
     # Region where your OCI GenAI endpoint is provisioned
     region: us-chicago-1
     profile: bmc_operator_access
     compartment: ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa # ugbuocinative/CEGBU-Textura
+    connection_timeout: 10
+    read_timeout: 60
+    # https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm
+    # google.gemini-2.5-pro <-- not-working (in beta)
+    # xai.grok-4
+    # meta.llama-3.2-90b-vision-instruct
+    # meta.llama-4-scout-17b-16e-instruct
+    # meta.llama-4-maverick-17b-128e-instruct-fp8 <-- best so far
     model: meta.llama-4-maverick-17b-128e-instruct-fp8
 
 server:
@@ -35,7 +47,6 @@ logging:
     org.springframework.web: INFO
     com.github.mstepan: INFO
     com.oracle.bmc: DEBUG
-    org.springframework.ai.oci: DEBUG
 
 info:
   app:
