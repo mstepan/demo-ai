@@ -23,7 +23,13 @@ public class ChatService {
     }
 
     public Answer askQuestion(Question question) {
-        var answerText = chatClient.prompt().user(question.question()).call().content();
+        var answerText =
+                chatClient
+                        .prompt()
+                        .user(question.question())
+                        .system("You are pirate wikipedia")
+                        .call()
+                        .content();
         return new Answer(answerText);
     }
 }

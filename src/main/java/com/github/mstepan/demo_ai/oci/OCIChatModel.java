@@ -50,6 +50,8 @@ public class OCIChatModel implements ChatModel {
                                                     .build()))
                             .build();
 
+            LOGGER.debug("SYSTEM PROMPT: {}", systemPrompt.toString());
+
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/TextContent
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/ImageContent
             UserMessage userQuery =
@@ -60,6 +62,8 @@ public class OCIChatModel implements ChatModel {
                                                     .text(prompt.getUserMessage().getText())
                                                     .build()))
                             .build();
+
+            LOGGER.debug("USER PROMPT: {}", userQuery.toString());
 
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/GenericChatRequest
             GenericChatRequest genericChatRequest =
