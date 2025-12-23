@@ -7,16 +7,22 @@ import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.oracle.bmc.generativeaiinference.model.*;
 import com.oracle.bmc.generativeaiinference.requests.ChatRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
-import shaded.com.oracle.oci.javasdk.org.apache.http.HttpStatus;
-
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.List;
 
 public class OCIChatModel implements ChatModel {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     // https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm
     // google.gemini-2.5-pro <-- not-working (in beta)
@@ -26,8 +32,8 @@ public class OCIChatModel implements ChatModel {
     // meta.llama-4-maverick-17b-128e-instruct-fp8 <-- best so far
     private static final String LLM_MODEL_ID = "meta.llama-4-maverick-17b-128e-instruct-fp8";
 
-    private static final int SOCKET_CONNECTION_TIMEOUT_IN_MS = 10;
-    private static final int SOCKET_READ_TIMEOUT_IN_MS = 60;
+    private static final int SOCKET_CONNECTION_TIMEOUT_IN_MS = 10_000;
+    private static final int SOCKET_READ_TIMEOUT_IN_MS = 60_000;
 
     @Override
     public ChatResponse call(Prompt prompt) {
@@ -84,17 +90,12 @@ public class OCIChatModel implements ChatModel {
             com.oracle.bmc.generativeaiinference.responses.ChatResponse response =
                     client.chat(chatRequest);
 
-            if (response.get__httpStatusCode__() != HttpStatus.SC_OK) {
-                throw new IllegalStateException(
-                        "Gen AI chat conversation failed with HTTP code: %d"
-                                .formatted(response.get__httpStatusCode__()));
-            }
             BaseChatResponse baseResponse = response.getChatResult().getChatResponse();
 
             List<ChatChoice> choices = ((GenericChatResponse) baseResponse).getChoices();
 
             if (choices.isEmpty()) {
-                System.err.println("No choices inside LLM response");
+                LOGGER.warn("No choices inside LLM response");
                 return ChatResponse.builder().build();
             }
 
@@ -108,14 +109,16 @@ public class OCIChatModel implements ChatModel {
             }
 
             if (chatContent.getFirst() instanceof TextContent textContent) {
-                // TODO:
-                return ChatResponse.builder().build(); // Optional.of(textContent.getText());
+                AssistantMessage assistant = new AssistantMessage(textContent.getText());
+                return ChatResponse.builder()
+                        .generations(List.of(new Generation(assistant)))
+                        .build();
             } else {
-                System.err.println("ChatContent is not of type TextContent");
+                LOGGER.warn("ChatContent is not of type TextContent");
                 return ChatResponse.builder().build();
             }
         } catch (Exception ex) {
-            ex.printStackTrace();
+            LOGGER.error("OCI GenAI call failed", ex);
             return ChatResponse.builder().build();
         }
     }
