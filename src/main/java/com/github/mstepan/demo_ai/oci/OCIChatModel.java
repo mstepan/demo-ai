@@ -14,11 +14,15 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.util.List;
 
+@Primary
+@Component
 public class OCIChatModel implements ChatModel {
 
     private static final Logger LOGGER =
