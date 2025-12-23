@@ -44,6 +44,6 @@ public class ChatServiceWireMockTest {
         var chatService = new ChatService(chatClientBuilder);
         var answer = chatService.askQuestion(new Question("What is the capital of France?"));
         assertThat(answer).isNotNull();
-        assertThat(answer.answer()).isEqualTo("Paris");
+        assertThat(answer.answer()).isEqualTo("The capital of France is Paris.");
     }
 }

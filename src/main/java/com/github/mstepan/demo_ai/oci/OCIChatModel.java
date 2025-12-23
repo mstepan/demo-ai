@@ -1,5 +1,6 @@
 package com.github.mstepan.demo_ai.oci;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oracle.bmc.ClientConfiguration;
 import com.oracle.bmc.auth.SessionTokenAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
@@ -26,6 +27,7 @@ public class OCIChatModel implements ChatModel {
 
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final OCIGenAiProperties properties;
     private static final int DEFAULT_CONNECTION_TIMEOUT_SEC = 10;
@@ -94,6 +96,13 @@ public class OCIChatModel implements ChatModel {
             /* Send request to the Client */
             com.oracle.bmc.generativeaiinference.responses.ChatResponse response =
                     client.chat(chatRequest);
+
+            if (LOGGER.isDebugEnabled()) {
+                String rawJson =
+                        JSON.writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(response.getChatResult());
+                LOGGER.debug("RAW OCI GENAI RESPONSE:\n{}", rawJson);
+            }
 
             BaseChatResponse baseResponse = response.getChatResult().getChatResponse();
 

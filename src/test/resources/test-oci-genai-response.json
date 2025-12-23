@@ -1,27 +1,28 @@
 {
-  "id": "ocigenai-chat-01HXYZABCD1234",
-  "model": "meta.llama-4-maverick-17b-128e-instruct-fp8",
+  "modelId": "meta.llama-4-maverick-17b-128e-instruct-fp8",
+  "modelVersion": "1.0.0",
   "chatResponse": {
-    "responseType": "GENERIC",
+    "timeCreated": 1766497970165,
     "choices": [
       {
         "index": 0,
-        "finishReason": "STOP",
         "message": {
-          "role": "ASSISTANT",
           "content": [
             {
-              "type": "TEXT",
-              "text": "Paris"
+              "text": "The capital of France is Paris."
             }
-          ]
+          ],
+          "name": null,
+          "toolCalls": null
+        },
+        "finishReason": "stop",
+        "logprobs": {
+          "textOffset": null,
+          "tokenLogprobs": null,
+          "tokens": null,
+          "topLogprobs": null
         }
       }
-    ],
-    "usage": {
-      "inputTokens": 11,
-      "outputTokens": 13,
-      "totalTokens": 24
-    }
+    ]
   }
 }
