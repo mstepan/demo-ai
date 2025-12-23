@@ -1,24 +1,18 @@
 package com.github.mstepan.demo_ai.oci;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Name;
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.constraints.NotBlank;
 
-/**
- * Binds properties under 'oci.genai' from application.yaml.
- *
- * Example:
- * oci:
- *   genai:
- *     region: us-chicago-1
- *     profile: bmc_operator_access
- *     compartment: ocid1.compartment....
- *     model: meta.llama-4-maverick-17b-128e-instruct-fp8
- */
+/** Binds properties under 'oci.genai' from application.yaml. */
 @ConfigurationProperties(prefix = "oci.genai")
+@Validated
 public record OCIGenAiProperties(
         String region,
-        String profile,
-        String compartment,
-        String model,
+        @Name("base.url") String baseUrl,
+        @NotBlank String profile,
+        @NotBlank String compartment,
+        @NotBlank String model,
         Integer connectionTimeout,
-        Integer readTimeout
-) {}
+        Integer readTimeout) {}

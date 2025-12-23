@@ -1,7 +1,6 @@
 package com.github.mstepan.demo_ai.oci;
 
 import com.oracle.bmc.ClientConfiguration;
-import com.oracle.bmc.Region;
 import com.oracle.bmc.auth.SessionTokenAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.oracle.bmc.generativeaiinference.model.*;
@@ -131,8 +130,7 @@ public class OCIChatModel implements ChatModel {
 
     private GenerativeAiInferenceClient newClient() {
         try {
-            var authProvider =
-                    new SessionTokenAuthenticationDetailsProvider(properties.profile());
+            var authProvider = new SessionTokenAuthenticationDetailsProvider(properties.profile());
 
             int connectionTimeoutSec =
                     (properties.connectionTimeout() != null)
@@ -154,7 +152,8 @@ public class OCIChatModel implements ChatModel {
                     GenerativeAiInferenceClient.builder()
                             .configuration(clientConfig)
                             .build(authProvider);
-            client.setRegion(Region.fromRegionId(properties.region()));
+            //            client.setRegion(Region.fromRegionId(properties.region()));
+            client.setEndpoint(properties.baseUrl());
             return client;
         } catch (IOException ioEx) {
             throw new IllegalStateException(ioEx);

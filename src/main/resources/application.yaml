@@ -19,8 +19,10 @@ spring:
 #
 oci:
   genai:
-    # Region where your OCI GenAI endpoint is provisioned
-    region: us-chicago-1
+    # OCI GenAI endpoint (specific per region)
+    # US_CHICAGO_1=https://inference.generativeai.us-chicago-1.oci.oraclecloud.com
+    # US_ASHBURN_1=https://inference.generativeai.us-ashburn-1.oci.oraclecloud.com
+    base.url: https://inference.generativeai.us-chicago-1.oci.oraclecloud.com
     profile: bmc_operator_access
     compartment: ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa # ugbuocinative/CEGBU-Textura
     connection_timeout: 10
@@ -49,7 +51,7 @@ logging:
     org.springframework: INFO
     org.springframework.web: INFO
     com.github.mstepan: INFO
-    com.oracle.bmc: INFO
+    com.oracle.bmc: DEBUG
 
 info:
   app:

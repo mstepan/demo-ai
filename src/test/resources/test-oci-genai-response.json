@@ -1,0 +1,27 @@
+{
+  "id": "ocigenai-chat-01HXYZABCD1234",
+  "model": "meta.llama-4-maverick-17b-128e-instruct-fp8",
+  "chatResponse": {
+    "responseType": "GENERIC",
+    "choices": [
+      {
+        "index": 0,
+        "finishReason": "STOP",
+        "message": {
+          "role": "ASSISTANT",
+          "content": [
+            {
+              "type": "TEXT",
+              "text": "Paris"
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "inputTokens": 11,
+      "outputTokens": 13,
+      "totalTokens": 24
+    }
+  }
+}

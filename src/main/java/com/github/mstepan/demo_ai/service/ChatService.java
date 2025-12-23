@@ -13,8 +13,6 @@ import java.lang.invoke.MethodHandles;
 @Service
 public class ChatService {
 
-    private static final String SYSTEM_PROMPT = "You are software security audit system.";
-
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
@@ -25,13 +23,7 @@ public class ChatService {
     }
 
     public Answer askQuestion(Question question) {
-        var answerText =
-                chatClient
-                        .prompt()
-                        .user(question.question())
-                        .system(SYSTEM_PROMPT)
-                        .call()
-                        .content();
+        var answerText = chatClient.prompt().user(question.question()).call().content();
         return new Answer(answerText);
     }
 }
