@@ -50,8 +50,8 @@ logging:
     root: INFO
     org.springframework: INFO
     org.springframework.web: INFO
-    com.github.mstepan: DEBUG
-    com.oracle.bmc: DEBUG
+    com.github.mstepan: INFO
+    com.oracle.bmc: INFO
 
 info:
   app:
