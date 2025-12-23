@@ -107,35 +107,42 @@ public class OCIChatModel implements ChatModel {
                     LOGGER.debug("RAW OCI GENAI RESPONSE:\n{}", rawJson);
                 }
 
-                BaseChatResponse baseResponse = response.getChatResult().getChatResponse();
+                if (response.getChatResult().getChatResponse()
+                        instanceof GenericChatResponse baseResponse) {
 
-                List<ChatChoice> choices = ((GenericChatResponse) baseResponse).getChoices();
+                    List<ChatChoice> choices = baseResponse.getChoices();
 
-                if (choices.isEmpty()) {
-                    LOGGER.warn("No choices inside LLM response");
-                    return ChatResponse.builder().build();
-                }
+                    if (choices.isEmpty()) {
+                        LOGGER.warn("No choices inside LLM response");
+                        return ChatResponse.builder().build();
+                    }
 
-                ChatChoice firstChoice = choices.getFirst();
+                    ChatChoice firstChoice = choices.getFirst();
 
-                List<ChatContent> chatContent = firstChoice.getMessage().getContent();
+                    List<ChatContent> chatContent = firstChoice.getMessage().getContent();
 
-                if (chatContent.isEmpty()) {
-                    System.err.println("Chat content is empty");
-                    return ChatResponse.builder().build();
-                }
+                    if (chatContent.isEmpty()) {
+                        System.err.println("Chat content is empty");
+                        return ChatResponse.builder().build();
+                    }
 
-                if (chatContent.getFirst() instanceof TextContent textContent) {
-                    AssistantMessage assistant = new AssistantMessage(textContent.getText());
-                    return ChatResponse.builder()
-                            .generations(List.of(new Generation(assistant)))
-                            .build();
+                    if (chatContent.getFirst() instanceof TextContent textContent) {
+                        AssistantMessage assistant = new AssistantMessage(textContent.getText());
+                        return ChatResponse.builder()
+                                .generations(List.of(new Generation(assistant)))
+                                .build();
+                    } else {
+                        LOGGER.warn("ChatContent is not of type TextContent");
+                        return ChatResponse.builder().build();
+                    }
                 } else {
-                    LOGGER.warn("ChatContent is not of type TextContent");
+                    LOGGER.warn(
+                            "'response.getChatResult().getChatResponse()' is not of type 'GenericChatResponse'");
                     return ChatResponse.builder().build();
                 }
             } else {
-                LOGGER.warn("Unexpected response from OCI GENAI");
+                LOGGER.warn(
+                        "'genericResponse' is not of type 'com.oracle.bmc.generativeaiinference.responses.ChatResponse'");
                 return ChatResponse.builder().build();
             }
 
