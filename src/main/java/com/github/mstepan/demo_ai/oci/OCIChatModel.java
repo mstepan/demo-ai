@@ -82,10 +82,10 @@ public class OCIChatModel implements ChatModel {
             ChatDetails chatDetails =
                     ChatDetails.builder()
                             // ugbuocinative/CEGBU-Textura
-                            .compartmentId(properties.getCompartment())
+                            .compartmentId(properties.compartment())
                             .servingMode(
                                     OnDemandServingMode.builder()
-                                            .modelId(properties.getModel())
+                                            .modelId(properties.model())
                                             .build())
                             .chatRequest(genericChatRequest)
                             .build();
@@ -132,16 +132,16 @@ public class OCIChatModel implements ChatModel {
     private GenerativeAiInferenceClient newClient() {
         try {
             var authProvider =
-                    new SessionTokenAuthenticationDetailsProvider(properties.getProfile());
+                    new SessionTokenAuthenticationDetailsProvider(properties.profile());
 
             int connectionTimeoutSec =
-                    (properties.getConnectionTimeout() != null)
-                            ? properties.getConnectionTimeout()
+                    (properties.connectionTimeout() != null)
+                            ? properties.connectionTimeout()
                             : DEFAULT_CONNECTION_TIMEOUT_SEC;
 
             int readTimeoutSec =
-                    (properties.getReadTimeout() != null)
-                            ? properties.getReadTimeout()
+                    (properties.readTimeout() != null)
+                            ? properties.readTimeout()
                             : DEFAULT_READ_TIMEOUT_SEC;
 
             var clientConfig =
@@ -154,7 +154,7 @@ public class OCIChatModel implements ChatModel {
                     GenerativeAiInferenceClient.builder()
                             .configuration(clientConfig)
                             .build(authProvider);
-            client.setRegion(Region.fromRegionId(properties.getRegion()));
+            client.setRegion(Region.fromRegionId(properties.region()));
             return client;
         } catch (IOException ioEx) {
             throw new IllegalStateException(ioEx);

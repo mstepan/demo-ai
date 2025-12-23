@@ -12,10 +12,10 @@ spring:
     virtual:
       enabled: true
 #
-# OCI Generative AI configuration
-# For auth we use session token, so don't forget to call:
+#  OCI Generative AI settings.
+#  We’re using a session token for auth - remember to obtain a new session token before use:
 #
-# oci session authenticate --region us-ashburn-1 --profile-name bmc_operator_access
+# oci session authenticate --region us-chicago-1 --profile-name bmc_operator_access
 #
 oci:
   genai:
