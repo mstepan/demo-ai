@@ -2,17 +2,15 @@ package com.github.mstepan.demo_ai.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.github.mstepan.demo_ai.common.OCIGenAIFactsEvaluator;
-import com.github.mstepan.demo_ai.common.OCIGenAIRelevancyEvaluator;
 import com.github.mstepan.demo_ai.web.Question;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
@@ -23,15 +21,13 @@ public class ChatServiceIntegrationTest {
 
     @Autowired ChatClient.Builder chatClientBuilder;
 
+    @Autowired
+    @Qualifier("ociGenAIRelevancyEvaluator")
     Evaluator relevancyEvaluator;
 
+    @Autowired
+    @Qualifier("ociGenAIFactsEvaluator")
     Evaluator factsEvaluator;
-
-    @BeforeEach
-    void setUp() {
-        relevancyEvaluator = new OCIGenAIRelevancyEvaluator(chatClientBuilder);
-        factsEvaluator = new OCIGenAIFactsEvaluator(chatClientBuilder);
-    }
 
     @Test
     void evaluateRelevancy() {

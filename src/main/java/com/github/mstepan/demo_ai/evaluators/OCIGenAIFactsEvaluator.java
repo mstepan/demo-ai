@@ -1,38 +1,37 @@
-package com.github.mstepan.demo_ai.common;
+package com.github.mstepan.demo_ai.evaluators;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.EvaluationResponse;
 import org.springframework.ai.evaluation.Evaluator;
+import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.Map;
 
 /**
- * Evaluator that verifies whether a natural-language claim is supported by a
- * provided document, using an OCI GenAI-backed ChatClient.
- * The model is instructed to produce exactly one word: "yes" or "no".
+ * Evaluator that verifies whether a natural-language claim is supported by a provided document,
+ * using an OCI GenAI-backed ChatClient. The model is instructed to produce exactly one word: "yes"
+ * or "no".
  *
- * Interpretation:
- * - "yes" (any case) -> passing=true
- * - any other output  -> passing=false
+ * <p>Interpretation: - "yes" (any case) -> passing=true - any other output -> passing=false
  *
- * Input mapping:
- * - EvaluationRequest.userText : the claim to verify
- * - Document                   : a fixed test document held in {@link #FACTS}
+ * <p>Input mapping: - EvaluationRequest.userText : the claim to verify - Document : a fixed test
+ * document held in {@link #FACTS}
  *
- * A ChatClient is built from the supplied builder for each evaluation call.
+ * <p>A ChatClient is built from the supplied builder for each evaluation call.
  *
  * @param chatClientBuilder builder used to create ChatClient instances
  */
+@Component("ociGenAIFactsEvaluator")
 public record OCIGenAIFactsEvaluator(ChatClient.Builder chatClientBuilder) implements Evaluator {
 
     /**
-     * System prompt defining the role and strict single-word output format
-     * for the fact checking task.
+     * System prompt defining the role and strict single-word output format for the fact checking
+     * task.
      */
-    private static final PromptTemplate SYSTEM_PROMPT =
+    private static final PromptTemplate SYSTEM_PROMPT_TEMPLATE =
             new PromptTemplate(
 """
 You are a fact verification assistant.
@@ -47,10 +46,10 @@ Rules:
 """);
 
     /**
-     * User prompt template that injects the claim to verify and the document
-     * that serves as the sole source of truth.
+     * User prompt template that injects the claim to verify and the document that serves as the
+     * sole source of truth.
      */
-    private static final PromptTemplate USER_PROMPT =
+    private static final PromptTemplate USER_PROMPT_PROMPT =
             new PromptTemplate(
 """
 Evaluate whether the following claim is supported by the provided document.
@@ -68,8 +67,8 @@ Document: {document}
 """);
 
     /**
-     * Fixed "document" used during evaluation to keep tests deterministic.
-     * The claim is checked strictly against this content only.
+     * Fixed "document" used during evaluation to keep tests deterministic. The claim is checked
+     * strictly against this content only.
      */
     private static final String FACTS =
             """
@@ -82,12 +81,10 @@ Document: {document}
             """;
 
     /**
-     * Executes the fact verification by rendering the system and user prompts
-     * and delegating the decision to the underlying chat model.
+     * Executes the fact verification by rendering the system and user prompts and delegating the
+     * decision to the underlying chat model.
      *
-     * Mapping:
-     * - Model output "yes" (any case) -> passing=true
-     * - Otherwise                      -> passing=false
+     * <p>Mapping: - Model output "yes" (any case) -> passing=true - Otherwise -> passing=false
      *
      * @param evaluationRequest container holding the claim (userText)
      * @return EvaluationResponse indicating pass/fail; reason is empty
@@ -99,9 +96,9 @@ Document: {document}
                 this.chatClientBuilder
                         .build()
                         .prompt()
-                        .system(SYSTEM_PROMPT.render())
+                        .system(SYSTEM_PROMPT_TEMPLATE.render())
                         .user(
-                                USER_PROMPT.render(
+                                USER_PROMPT_PROMPT.render(
                                         Map.of(
                                                 "claim",
                                                 evaluationRequest.getUserText(),
