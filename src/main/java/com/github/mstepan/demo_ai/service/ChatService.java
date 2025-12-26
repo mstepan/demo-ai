@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
@@ -35,15 +36,24 @@ public class ChatService {
         this.evaluator = evaluator;
     }
 
-    @Retryable(retryFor = AnswerNotRelevantException.class)
+    @Retryable(retryFor = AnswerNotRelevantException.class, maxAttempts = 2)
     public Answer askQuestion(Question question) {
         var answerText = chatClient.prompt().user(question.question()).call().content();
 
-        if (!evaluator.evaluate(new EvaluationRequest(question.question(), answerText)).isPass()) {
-            throw new AnswerNotRelevantException();
-        }
+        evaluateRelevancy(question.question(), answerText);
 
         return new Answer(answerText);
+    }
+
+    @Recover
+    public Answer recover(AnswerNotRelevantException ex) {
+        return new Answer("Can't find answer to your question.");
+    }
+
+    private void evaluateRelevancy(String questionText, String answerText) {
+        if (!evaluator.evaluate(new EvaluationRequest(questionText, answerText)).isPass()) {
+            throw new AnswerNotRelevantException(questionText, answerText);
+        }
     }
 
     public Flux<String> streamAnswer(Question question) {
