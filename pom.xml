@@ -84,7 +84,35 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Run only unit tests by default: exclude tests tagged as 'exhaustive' -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- For JUnit 5, groups/excludedGroups map to include/exclude tags -->
+                    <excludedGroups>exhaustive</excludedGroups>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <!-- Activate this profile to run ONLY the exhaustive/integration tests -->
+    <profiles>
+        <profile>
+            <id>exhaustive</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration combine.self="override">
+                            <!-- Run ALL tests, including those tagged 'exhaustive' -->
+                            <excludedGroups/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

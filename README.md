@@ -12,6 +12,26 @@
 ./mvnw spring-boot:run
 ```
 
+## Testing
+
+* Execute unit and integration tests
+
+```bash
+./mvnw test
+```
+
+* Execute all test including exhaustive
+
+Don't forget to obtain a valid OCI SESSION TOKEN for exhaustive tests
+
+```bash
+oci session authenticate --region us-chicago-1 --profile-name bmc_operator_access
+```
+
+```bash
+./mvnw test -Pexhaustive
+```
+
 ## Logo
 
 Logo generated using [patorjk](https://patorjk.com/software/taag) and `Standard` style.
