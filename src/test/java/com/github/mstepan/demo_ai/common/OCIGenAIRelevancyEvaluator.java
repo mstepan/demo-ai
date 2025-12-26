@@ -9,9 +9,30 @@ import org.springframework.ai.evaluation.Evaluator;
 import java.util.Collections;
 import java.util.Map;
 
+/**
+ * Evaluator that uses an OCI GenAI-backed ChatClient to decide whether a candidate
+ * answer is relevant to and correctly addresses the provided question.
+ * The model is instructed to reply with a single token: "YES" or "NO".
+ *
+ * Interpretation:
+ * - "YES" (any case) -> passing=true, score=1.0
+ * - any other output  -> passing=false, score=0.0
+ *
+ * Input mapping:
+ * - EvaluationRequest.userText        : question to be evaluated against
+ * - EvaluationRequest.responseContent : candidate answer to judge
+ *
+ * A ChatClient is built from the supplied builder for each evaluation call.
+ *
+ * @param chatClientBuilder builder used to create ChatClient instances
+ */
 public record OCIGenAIRelevancyEvaluator(ChatClient.Builder chatClientBuilder)
         implements Evaluator {
 
+    /**
+     * System prompt that defines the role and strict YES/NO output format
+     * for the relevancy judgment task.
+     */
     private static final PromptTemplate SYSTEM_PROMPT_TEMPLATE =
             new PromptTemplate(
 """
@@ -26,6 +47,10 @@ Rules:
 - If the answer does not address the question, is off-topic, or is factually incorrect, respond NO.
 """);
 
+    /**
+     * User prompt template that injects the question and the candidate answer
+     * to be judged for relevance.
+     */
     private static final PromptTemplate USER_PROMPT_TEMPLATE =
             new PromptTemplate(
 """
@@ -38,6 +63,14 @@ Answer:
 {answer}
 """);
 
+    /**
+     * Executes the relevancy evaluation by constructing a system and user prompt
+     * and delegating the judgment to the underlying chat model.
+     *
+     * @param evaluationRequest container holding the question (userText) and
+     *                          the candidate answer (responseContent)
+     * @return EvaluationResponse with pass/fail and score (1.0 or 0.0)
+     */
     @Override
     public EvaluationResponse evaluate(EvaluationRequest evaluationRequest) {
 
