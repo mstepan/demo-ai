@@ -10,6 +10,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -26,16 +28,33 @@ public class ChatService {
 
     private final Evaluator evaluator;
 
+    private final Resource systemPromptTemplate;
+
+    private final Resource userPromptTemplate;
+
     public ChatService(
             ChatClient.Builder chatClientBuilder,
-            @Qualifier("ociGenAIRelevancyEvaluator") Evaluator evaluator) {
+            @Qualifier("ociGenAIRelevancyEvaluator") Evaluator evaluator,
+            @Value("classpath:/prompts/chat/chatSystemPrompt.st") Resource systemPromptTemplate,
+            @Value("classpath:/prompts/chat/chatUserPrompt.st") Resource userPromptTemplate) {
         this.chatClient = chatClientBuilder.build();
         this.evaluator = evaluator;
+        this.systemPromptTemplate = systemPromptTemplate;
+        this.userPromptTemplate = userPromptTemplate;
     }
 
     @Retryable(retryFor = AnswerNotRelevantException.class, maxAttempts = 2)
     public Answer askQuestion(Question question) {
-        var answerText = chatClient.prompt().user(question.question()).call().content();
+        var answerText =
+                chatClient
+                        .prompt()
+                        .system(systemPromptTemplate)
+                        .user(
+                                userSpec ->
+                                        userSpec.text(userPromptTemplate)
+                                                .param("question", question.question()))
+                        .call()
+                        .content();
 
         evaluateRelevancy(question.question(), answerText);
 

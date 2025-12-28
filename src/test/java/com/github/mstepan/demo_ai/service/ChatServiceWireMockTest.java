@@ -43,6 +43,12 @@ public class ChatServiceWireMockTest {
     @Qualifier("ociGenAIRelevancyEvaluator")
     Evaluator relevancyEvaluator;
 
+    @Value("classpath:/prompts/chat/chatSystemPrompt.st")
+    Resource systemPromptTemplate;
+
+    @Value("classpath:/prompts/chat/chatUserPrompt.st")
+    Resource userPromptTemplate;
+
     @TestConfiguration
     static class MockConfig {
         @Bean
@@ -69,7 +75,12 @@ public class ChatServiceWireMockTest {
         when(relevancyEvaluator.evaluate(any()))
                 .thenReturn(new EvaluationResponse(true, 1.0F, "", Map.of()));
 
-        var chatService = new ChatService(chatClientBuilder, relevancyEvaluator);
+        var chatService =
+                new ChatService(
+                        chatClientBuilder,
+                        relevancyEvaluator,
+                        systemPromptTemplate,
+                        userPromptTemplate);
         var answer = chatService.askQuestion(new Question("What is the capital of France?"));
         assertThat(answer).isNotNull();
         assertThat(answer.answer()).isEqualTo("The capital of France is Paris.");
