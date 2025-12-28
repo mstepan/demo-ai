@@ -51,7 +51,7 @@ logging:
     org.springframework: INFO
     org.springframework.web: INFO
     com.github.mstepan: DEBUG
-    com.oracle.bmc: INFO
+    com.oracle.bmc: WARN
 
 info:
   app:
