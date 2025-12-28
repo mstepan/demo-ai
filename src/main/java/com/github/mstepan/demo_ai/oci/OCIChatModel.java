@@ -69,13 +69,10 @@ public class OCIChatModel implements ChatModel {
             GenericChatRequest genericChatRequest =
                     GenericChatRequest.builder()
                             .messages(List.of(systemPrompt, userQuery))
-                            // .maxTokens(1028) use max model context
                             .temperature(
-                                    1.0) // 1.0 - Creative response, 0.0 - Deterministic response
-                            .topP(0.7) // No nucleus sampling needed when temperature = 0.0
-                            .topK(1) // Use full vocabulary
-                            // .frequencyPenalty(0.0) // No penalty for repeating words
-                            // .presencePenalty(0.0) // No penalty for repeating ideas
+                                    properties
+                                            .temperature()) // configured via oci.genai.temperature
+                            .maxTokens(properties.maxTokens())
                             .isEcho(false)
                             .isStream(false)
                             .build();
