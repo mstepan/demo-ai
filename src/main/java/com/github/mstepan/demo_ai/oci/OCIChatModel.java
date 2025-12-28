@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +96,7 @@ public class OCIChatModel implements ChatModel {
                 String rawJson =
                         JSON.writerWithDefaultPrettyPrinter()
                                 .writeValueAsString(buildLoggableRequest(chatDetails));
-                logLLMInteraction("OCI GEN AI REQUEST ===> ", rawJson);
+                logLLMInteraction(RequestDirection.OUT_BOUND, rawJson);
             }
 
             // Send request to the LLM
@@ -110,7 +111,7 @@ public class OCIChatModel implements ChatModel {
                             JSON.writerWithDefaultPrettyPrinter()
                                     .writeValueAsString(response.getChatResult());
 
-                    logLLMInteraction("OCI GEN AI RESPONSE <=== ", rawJson);
+                    logLLMInteraction(RequestDirection.IN_BOUND, rawJson);
                 }
 
                 if (response.getChatResult().getChatResponse()
@@ -158,14 +159,20 @@ public class OCIChatModel implements ChatModel {
         }
     }
 
-    private static void logLLMInteraction(String title, String logMsg) {
+    enum RequestDirection {
+        OUT_BOUND,
+        IN_BOUND
+    }
+
+    private static void logLLMInteraction(RequestDirection direction, String logMsg) {
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(
-                    "======================================= {} =======================================",
-                    title);
+            if (direction == RequestDirection.OUT_BOUND) {
+                LOGGER.debug("APP ==========> LLM");
+            } else {
+                LOGGER.debug("APP <========== LLM");
+            }
+
             LOGGER.debug("{}", logMsg);
-            LOGGER.debug(
-                    "=======================================================================================================");
         }
     }
 
@@ -205,14 +212,14 @@ public class OCIChatModel implements ChatModel {
     }
 
     private static Object buildLoggableRequest(ChatDetails chatDetails) {
-        java.util.Map<String, Object> root = new java.util.LinkedHashMap<>();
+        Map<String, Object> root = new LinkedHashMap<>();
         if (chatDetails == null) {
             return root;
         }
 
         root.put("compartmentId", chatDetails.getCompartmentId());
 
-        java.util.Map<String, Object> serving = new java.util.LinkedHashMap<>();
+        Map<String, Object> serving = new LinkedHashMap<>();
         if (chatDetails.getServingMode() instanceof OnDemandServingMode sm) {
             serving.put("modelId", sm.getModelId());
         } else if (chatDetails.getServingMode() != null) {
@@ -224,29 +231,17 @@ public class OCIChatModel implements ChatModel {
 
         Map<String, Object> req = new LinkedHashMap<>();
         if (chatDetails.getChatRequest() instanceof GenericChatRequest gcr) {
-            java.util.List<Object> messages = new java.util.ArrayList<>();
+            List<Object> messages = new ArrayList<>();
             if (gcr.getMessages() != null) {
                 for (var m : gcr.getMessages()) {
-                    java.util.Map<String, Object> mm = new java.util.LinkedHashMap<>();
-                    String role;
-                    if (m instanceof com.oracle.bmc.generativeaiinference.model.SystemMessage) {
-                        role = "system";
-                    } else if (m
-                            instanceof com.oracle.bmc.generativeaiinference.model.UserMessage) {
-                        role = "user";
-                    } else if (m
-                            instanceof
-                            com.oracle.bmc.generativeaiinference.model.AssistantMessage) {
-                        role = "assistant";
-                    } else {
-                        role = m.getClass().getSimpleName();
-                    }
+                    Map<String, Object> mm = new LinkedHashMap<>();
+                    String role = getRole(m);
                     mm.put("role", role);
 
-                    java.util.List<Object> contentList = new java.util.ArrayList<>();
+                    List<Object> contentList = new ArrayList<>();
                     if (m.getContent() != null) {
                         for (var c : m.getContent()) {
-                            java.util.Map<String, Object> cc = new java.util.LinkedHashMap<>();
+                            Map<String, Object> cc = new LinkedHashMap<>();
                             if (c instanceof TextContent tc) {
                                 cc.put("type", "text");
                                 cc.put("text", tc.getText());
@@ -282,5 +277,19 @@ public class OCIChatModel implements ChatModel {
         }
         root.put("chatRequest", req);
         return root;
+    }
+
+    private static String getRole(Message m) {
+        String role;
+        if (m instanceof SystemMessage) {
+            role = "system";
+        } else if (m instanceof UserMessage) {
+            role = "user";
+        } else if (m instanceof com.oracle.bmc.generativeaiinference.model.AssistantMessage) {
+            role = "assistant";
+        } else {
+            role = m.getClass().getSimpleName();
+        }
+        return role;
     }
 }
