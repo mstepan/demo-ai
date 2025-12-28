@@ -1,14 +1,14 @@
 package com.github.mstepan.demo_ai.evaluators;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.EvaluationResponse;
 import org.springframework.ai.evaluation.Evaluator;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
-import java.util.Map;
 
 /**
  * Evaluator that verifies whether a natural-language claim is supported by a provided document,
@@ -25,51 +25,16 @@ import java.util.Map;
  * @param chatClientBuilder builder used to create ChatClient instances
  */
 @Component("ociGenAIFactsEvaluator")
-public record OCIGenAIFactsEvaluator(ChatClient.Builder chatClientBuilder) implements Evaluator {
+public record OCIGenAIFactsEvaluator(
+        ChatClient.Builder chatClientBuilder,
+        @Value("classpath:/prompts/factsEvaluator/factsEvaluatorSystemPrompt.st")
+                Resource systemPromptTemplate,
+        @Value("classpath:/prompts/factsEvaluator/factsEvaluatorUserPrompt.st")
+                Resource userPromptTemplate)
+        implements Evaluator {
 
-    /**
-     * System prompt defining the role and strict single-word output format for the fact checking
-     * task.
-     */
-    private static final PromptTemplate SYSTEM_PROMPT_TEMPLATE =
-            new PromptTemplate(
-"""
-You are a fact verification assistant.
-Your task is to determine whether a claim is supported by a given document.
+    private static final String EXPECTED_YES_RESPONSE = "yes";
 
-Rules:
-- Use ONLY the information explicitly stated in the document.
-- Do NOT use prior knowledge, common sense, or inference beyond the document.
-- If the claim is not clearly and directly supported, answer "no".
-- If the document is ambiguous, incomplete, or silent about the claim, answer "no".
-- Output MUST be exactly one word: "yes" or "no".
-""");
-
-    /**
-     * User prompt template that injects the claim to verify and the document that serves as the
-     * sole source of truth.
-     */
-    private static final PromptTemplate USER_PROMPT_PROMPT =
-            new PromptTemplate(
-"""
-Evaluate whether the following claim is supported by the provided document.
-
-A claim is considered "supported" ONLY IF the document explicitly states the claim or provides clear evidence that directly implies it.
-If the document contradicts the claim, does not mention it, or provides insufficient information, respond with "no".
-
-Use only the information in the document. Do not use external knowledge or assumptions.
-
-Respond with exactly one word: "yes" or "no".
-
-Claim: {claim}
-
-Document: {document}
-""");
-
-    /**
-     * Fixed "document" used during evaluation to keep tests deterministic. The claim is checked
-     * strictly against this content only.
-     */
     private static final String FACTS =
             """
             Here are few pirate names:
@@ -96,17 +61,15 @@ Document: {document}
                 this.chatClientBuilder
                         .build()
                         .prompt()
-                        .system(SYSTEM_PROMPT_TEMPLATE.render())
+                        .system(systemPromptTemplate)
                         .user(
-                                USER_PROMPT_PROMPT.render(
-                                        Map.of(
-                                                "claim",
-                                                evaluationRequest.getUserText(),
-                                                "document",
-                                                FACTS)))
+                                userSpec ->
+                                        userSpec.text(userPromptTemplate)
+                                                .param("claim", evaluationRequest.getUserText())
+                                                .param("document", FACTS))
                         .call()
                         .content();
-        boolean passing = "yes".equalsIgnoreCase(evaluationResponse);
+        boolean passing = EXPECTED_YES_RESPONSE.equalsIgnoreCase(evaluationResponse);
         return new EvaluationResponse(passing, "", Collections.emptyMap());
     }
 }

@@ -28,9 +28,10 @@ import java.util.Collections;
 @Component("ociGenAIRelevancyEvaluator")
 public record OCIGenAIRelevancyEvaluator(
         ChatClient.Builder chatClientBuilder,
-        @Value("classpath:/prompts/relevanceEvaluatorSystemPrompt.st")
+        @Value("classpath:/prompts/relevanceEvaluator/relevanceEvaluatorSystemPrompt.st")
                 Resource systemPromptTemplate,
-        @Value("classpath:/prompts/relevanceEvaluatorUserPrompt.st") Resource userPromptTemplate)
+        @Value("classpath:/prompts/relevanceEvaluator/relevanceEvaluatorUserPrompt.st")
+                Resource userPromptTemplate)
         implements Evaluator {
 
     private static final String EXPECTED_YES_RESPONSE = "yes";
