@@ -30,8 +30,8 @@ public class OCIChatModel implements ChatModel {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final OCIGenAiProperties properties;
-    private static final int DEFAULT_CONNECTION_TIMEOUT_SEC = 10;
-    private static final int DEFAULT_READ_TIMEOUT_SEC = 60;
+    private static final int DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
+    private static final int DEFAULT_READ_TIMEOUT_MS = 60_000;
 
     public OCIChatModel(OCIGenAiProperties properties) {
         this.properties = properties;
@@ -168,26 +168,29 @@ public class OCIChatModel implements ChatModel {
         try {
             var authProvider = new SessionTokenAuthenticationDetailsProvider(properties.profile());
 
-            int connectionTimeoutSec =
+            int connectionTimeoutMs =
                     (properties.connectionTimeout() != null)
-                            ? properties.connectionTimeout()
-                            : DEFAULT_CONNECTION_TIMEOUT_SEC;
+                            ? (int) properties.connectionTimeout().toMillis()
+                            : DEFAULT_CONNECTION_TIMEOUT_MS;
 
-            int readTimeoutSec =
+            int readTimeoutMs =
                     (properties.readTimeout() != null)
-                            ? properties.readTimeout()
-                            : DEFAULT_READ_TIMEOUT_SEC;
+                            ? (int) properties.readTimeout().toMillis()
+                            : DEFAULT_READ_TIMEOUT_MS;
 
             var clientConfig =
                     ClientConfiguration.builder()
-                            .connectionTimeoutMillis(connectionTimeoutSec * 1000)
-                            .readTimeoutMillis(readTimeoutSec * 1000)
+                            .connectionTimeoutMillis(connectionTimeoutMs)
+                            .readTimeoutMillis(readTimeoutMs)
                             .build();
 
             var client =
                     GenerativeAiInferenceClient.builder()
                             .configuration(clientConfig)
                             .build(authProvider);
+            //
+            // TODO: we can also use region insteadof or URL below
+            //
             //            client.setRegion(Region.fromRegionId(properties.region()));
             client.setEndpoint(properties.baseUrl());
             return client;
