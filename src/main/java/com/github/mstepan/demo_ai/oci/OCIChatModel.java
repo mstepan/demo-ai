@@ -19,7 +19,9 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Primary
 @Component
@@ -51,8 +53,6 @@ public class OCIChatModel implements ChatModel {
                                                     .build()))
                             .build();
 
-            logLLMInteraction("SYSTEM PROMPT", prompt.getSystemMessage().getText());
-
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/TextContent
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/ImageContent
             UserMessage userQuery =
@@ -64,16 +64,15 @@ public class OCIChatModel implements ChatModel {
                                                     .build()))
                             .build();
 
-            logLLMInteraction("USER PROMPT", prompt.getUserMessage().getText());
-
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/GenericChatRequest
             GenericChatRequest genericChatRequest =
                     GenericChatRequest.builder()
                             .messages(List.of(systemPrompt, userQuery))
                             // .maxTokens(1028) use max model context
-                            .temperature(0.0) // Deterministic output
-                            // .topP(1.0) // No nucleus sampling needed with temp=0
-                            .topK(1) // Use full vocabulary (fine)
+                            .temperature(
+                                    1.0) // 1.0 - Creative response, 0.0 - Deterministic response
+                            .topP(0.7) // No nucleus sampling needed when temperature = 0.0
+                            .topK(1) // Use full vocabulary
                             // .frequencyPenalty(0.0) // No penalty for repeating words
                             // .presencePenalty(0.0) // No penalty for repeating ideas
                             .isEcho(false)
@@ -82,7 +81,6 @@ public class OCIChatModel implements ChatModel {
 
             ChatDetails chatDetails =
                     ChatDetails.builder()
-                            // ugbuocinative/CEGBU-Textura
                             .compartmentId(properties.compartment())
                             .servingMode(
                                     OnDemandServingMode.builder()
@@ -93,7 +91,14 @@ public class OCIChatModel implements ChatModel {
 
             ChatRequest chatRequest = ChatRequest.builder().chatDetails(chatDetails).build();
 
-            /* Send request to the Client */
+            if (LOGGER.isDebugEnabled()) {
+                String rawJson =
+                        JSON.writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(buildLoggableRequest(chatDetails));
+                logLLMInteraction("OCI GEN AI REQUEST ===> ", rawJson);
+            }
+
+            // Send request to the LLM
             var genericResponse = client.chat(chatRequest);
 
             if (genericResponse
@@ -105,7 +110,7 @@ public class OCIChatModel implements ChatModel {
                             JSON.writerWithDefaultPrettyPrinter()
                                     .writeValueAsString(response.getChatResult());
 
-                    logLLMInteraction("RAW OCI GEN AI RESPONSE", rawJson);
+                    logLLMInteraction("OCI GEN AI RESPONSE <=== ", rawJson);
                 }
 
                 if (response.getChatResult().getChatResponse()
@@ -197,5 +202,85 @@ public class OCIChatModel implements ChatModel {
         } catch (IOException ioEx) {
             throw new IllegalStateException(ioEx);
         }
+    }
+
+    private static Object buildLoggableRequest(ChatDetails chatDetails) {
+        java.util.Map<String, Object> root = new java.util.LinkedHashMap<>();
+        if (chatDetails == null) {
+            return root;
+        }
+
+        root.put("compartmentId", chatDetails.getCompartmentId());
+
+        java.util.Map<String, Object> serving = new java.util.LinkedHashMap<>();
+        if (chatDetails.getServingMode() instanceof OnDemandServingMode sm) {
+            serving.put("modelId", sm.getModelId());
+        } else if (chatDetails.getServingMode() != null) {
+            serving.put("servingModeType", chatDetails.getServingMode().getClass().getSimpleName());
+        } else {
+            serving.put("servingModeType", null);
+        }
+        root.put("servingMode", serving);
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        if (chatDetails.getChatRequest() instanceof GenericChatRequest gcr) {
+            java.util.List<Object> messages = new java.util.ArrayList<>();
+            if (gcr.getMessages() != null) {
+                for (var m : gcr.getMessages()) {
+                    java.util.Map<String, Object> mm = new java.util.LinkedHashMap<>();
+                    String role;
+                    if (m instanceof com.oracle.bmc.generativeaiinference.model.SystemMessage) {
+                        role = "system";
+                    } else if (m
+                            instanceof com.oracle.bmc.generativeaiinference.model.UserMessage) {
+                        role = "user";
+                    } else if (m
+                            instanceof
+                            com.oracle.bmc.generativeaiinference.model.AssistantMessage) {
+                        role = "assistant";
+                    } else {
+                        role = m.getClass().getSimpleName();
+                    }
+                    mm.put("role", role);
+
+                    java.util.List<Object> contentList = new java.util.ArrayList<>();
+                    if (m.getContent() != null) {
+                        for (var c : m.getContent()) {
+                            java.util.Map<String, Object> cc = new java.util.LinkedHashMap<>();
+                            if (c instanceof TextContent tc) {
+                                cc.put("type", "text");
+                                cc.put("text", tc.getText());
+                            } else if (c instanceof ImageContent ic) {
+                                cc.put("type", "image");
+                                cc.put("url", ic.getImageUrl());
+                            } else {
+                                cc.put("type", c.getClass().getSimpleName());
+                            }
+                            contentList.add(cc);
+                        }
+                    }
+                    mm.put("content", contentList);
+                    messages.add(mm);
+                }
+            }
+            req.put("messages", messages);
+            req.put("isStream", gcr.getIsStream());
+            req.put("numGenerations", gcr.getNumGenerations());
+            req.put("seed", gcr.getSeed());
+            req.put("isEcho", gcr.getIsEcho());
+            req.put("topK", gcr.getTopK());
+            req.put("topP", gcr.getTopP());
+            req.put("temperature", gcr.getTemperature());
+            req.put("frequencyPenalty", gcr.getFrequencyPenalty());
+            req.put("presencePenalty", gcr.getPresencePenalty());
+            req.put("stop", gcr.getStop());
+            req.put("logProbs", gcr.getLogProbs());
+            req.put("maxTokens", gcr.getMaxTokens());
+            req.put("logitBias", gcr.getLogitBias());
+            req.put("toolChoice", gcr.getToolChoice());
+            req.put("tools", gcr.getTools());
+        }
+        root.put("chatRequest", req);
+        return root;
     }
 }
