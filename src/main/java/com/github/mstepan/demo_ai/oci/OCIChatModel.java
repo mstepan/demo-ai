@@ -14,24 +14,17 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
-import reactor.core.publisher.Flux;
-
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.invoke.MethodHandles;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Primary
 @Component
-public class OCIChatModel implements ChatModel, StreamingChatModel {
+public class OCIChatModel implements ChatModel {
 
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -170,186 +163,6 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
             LOGGER.debug(
                     "=======================================================================================================");
         }
-    }
-
-    @Override
-    public Flux<ChatResponse> stream(Prompt prompt) {
-        return Flux.create(
-                sink -> {
-                    try (GenerativeAiInferenceClient client = newClient()) {
-                        // Build messages (same as non-streaming)
-                        SystemMessage systemPrompt =
-                                SystemMessage.builder()
-                                        .content(
-                                                List.of(
-                                                        TextContent.builder()
-                                                                .text(
-                                                                        prompt.getSystemMessage()
-                                                                                .getText())
-                                                                .build()))
-                                        .build();
-
-                        UserMessage userQuery =
-                                UserMessage.builder()
-                                        .content(
-                                                List.of(
-                                                        TextContent.builder()
-                                                                .text(
-                                                                        prompt.getUserMessage()
-                                                                                .getText())
-                                                                .build()))
-                                        .build();
-
-                        // Enable streaming
-                        GenericChatRequest genericChatRequest =
-                                GenericChatRequest.builder()
-                                        .messages(List.of(systemPrompt, userQuery))
-                                        .temperature(0.0)
-                                        .topK(1)
-                                        .isEcho(false)
-                                        .isStream(true)
-                                        .build();
-
-                        ChatDetails chatDetails =
-                                ChatDetails.builder()
-                                        .compartmentId(properties.compartment())
-                                        .servingMode(
-                                                OnDemandServingMode.builder()
-                                                        .modelId(properties.model())
-                                                        .build())
-                                        .chatRequest(genericChatRequest)
-                                        .build();
-
-                        ChatRequest chatRequest =
-                                ChatRequest.builder().chatDetails(chatDetails).build();
-
-                        /* Invoke client - when isStream(true), the SDK may expose an InputStream of SSE events */
-                        var genericResponse = client.chat(chatRequest);
-
-                        InputStream is = null;
-                        try {
-                            var m = genericResponse.getClass().getMethod("getInputStream");
-                            Object streamObj = m.invoke(genericResponse);
-                            if (streamObj instanceof InputStream) {
-                                is = (InputStream) streamObj;
-                            }
-                        } catch (NoSuchMethodException ignore) {
-                            // SDK may not have getInputStream; fallback handled below
-                        } catch (Exception reflectEx) {
-                            LOGGER.warn(
-                                    "Failed to obtain streaming InputStream via reflection",
-                                    reflectEx);
-                        }
-
-                        if (is == null) {
-                            // Fallback to non-streaming: call once, then emit chunks to simulate
-                            // streaming
-                            // Build a non-streaming request and parse the final text
-                            GenericChatRequest nonStreamReq =
-                                    GenericChatRequest.builder()
-                                            .messages(List.of(systemPrompt, userQuery))
-                                            .temperature(0.0)
-                                            .topK(1)
-                                            .isEcho(false)
-                                            .isStream(false)
-                                            .build();
-
-                            ChatDetails nonStreamDetails =
-                                    ChatDetails.builder()
-                                            .compartmentId(properties.compartment())
-                                            .servingMode(
-                                                    OnDemandServingMode.builder()
-                                                            .modelId(properties.model())
-                                                            .build())
-                                            .chatRequest(nonStreamReq)
-                                            .build();
-
-                            ChatRequest nonStreamChatRequest =
-                                    ChatRequest.builder().chatDetails(nonStreamDetails).build();
-
-                            var nonStreamResponse = client.chat(nonStreamChatRequest);
-
-                            String finalText = "";
-                            if (nonStreamResponse
-                                    instanceof
-                                    com.oracle.bmc.generativeaiinference.responses.ChatResponse r) {
-                                if (r.getChatResult().getChatResponse()
-                                        instanceof GenericChatResponse gr) {
-                                    List<ChatChoice> choices = gr.getChoices();
-                                    if (choices != null && !choices.isEmpty()) {
-                                        List<ChatContent> content =
-                                                choices.getFirst().getMessage().getContent();
-                                        if (content != null
-                                                && !content.isEmpty()
-                                                && content.getFirst() instanceof TextContent tc) {
-                                            finalText = tc.getText();
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (finalText == null) {
-                                finalText = "";
-                            }
-
-                            // Emit in small chunks to the client
-                            int chunkSize = 32;
-                            for (int i = 0; i < finalText.length(); i += chunkSize) {
-                                String part =
-                                        finalText.substring(
-                                                i, Math.min(finalText.length(), i + chunkSize));
-                                AssistantMessage partial = new AssistantMessage(part);
-                                sink.next(
-                                        ChatResponse.builder()
-                                                .generations(List.of(new Generation(partial)))
-                                                .build());
-                            }
-                            sink.complete();
-                            return;
-                        }
-
-                        try (InputStream autoClose = is;
-                                BufferedReader br =
-                                        new BufferedReader(
-                                                new InputStreamReader(
-                                                        autoClose, StandardCharsets.UTF_8))) {
-
-                            String line;
-                            while ((line = br.readLine()) != null) {
-                                if (line.isEmpty()) {
-                                    continue;
-                                }
-                                // OCI streams SSE as "data: {json...}"
-                                if (!line.startsWith("data:")) {
-                                    continue;
-                                }
-                                String data = line.substring("data:".length()).trim();
-                                if (data.isEmpty() || "[DONE]".equalsIgnoreCase(data)) {
-                                    continue;
-                                }
-                                try {
-                                    JsonNode node = JSON.readTree(data);
-                                    String delta = extractDeltaText(node);
-                                    if (delta != null && !delta.isEmpty()) {
-                                        AssistantMessage partial = new AssistantMessage(delta);
-                                        sink.next(
-                                                ChatResponse.builder()
-                                                        .generations(
-                                                                List.of(new Generation(partial)))
-                                                        .build());
-                                    }
-                                } catch (Exception parseEx) {
-                                    // Ignore non-JSON SSE payloads
-                                }
-                            }
-
-                            sink.complete();
-                        }
-                    } catch (Exception ex) {
-                        LOGGER.error("OCI GenAI streaming call failed", ex);
-                        sink.error(ex);
-                    }
-                });
     }
 
     private String extractDeltaText(JsonNode node) {
