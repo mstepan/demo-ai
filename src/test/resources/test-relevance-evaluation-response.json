@@ -1,0 +1,31 @@
+{
+  "modelId": "meta.llama-4-maverick-17b-128e-instruct-fp8",
+  "modelVersion": "1.0.0",
+  "chatResponse": {
+    "apiFormat": "GENERIC",
+    "timeCreated": "2024-12-22T11:52:50.165Z",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "ASSISTANT",
+          "content": [
+            {
+              "type": "TEXT",
+              "text": "YES"
+            }
+          ],
+          "name": null,
+          "toolCalls": null
+        },
+        "finishReason": "STOP",
+        "logprobs": {
+          "textOffset": null,
+          "tokenLogprobs": null,
+          "tokens": null,
+          "topLogprobs": null
+        }
+      }
+    ]
+  }
+}
