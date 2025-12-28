@@ -51,3 +51,7 @@ curl -H "Content-Type: application/json" -X POST --data '{"question":"Write fair
 curl -N -H "Accept: text/event-stream" -H "Content-Type: application/json" -X POST --data '{"question":"Write fairy tail about pirates. At least 100 sentences.","stream":true}' http://localhost:7171/ask/stream
 
 ```
+
+## References
+
+* [Prompting Guide](https://www.promptingguide.ai/)

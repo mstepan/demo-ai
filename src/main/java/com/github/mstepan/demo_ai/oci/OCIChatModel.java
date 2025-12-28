@@ -1,6 +1,5 @@
 package com.github.mstepan.demo_ai.oci;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oracle.bmc.ClientConfiguration;
 import com.oracle.bmc.auth.SessionTokenAuthenticationDetailsProvider;
@@ -163,118 +162,6 @@ public class OCIChatModel implements ChatModel {
             LOGGER.debug(
                     "=======================================================================================================");
         }
-    }
-
-    private String extractDeltaText(JsonNode node) {
-        if (node == null) {
-            return "";
-        }
-
-        // Handle OpenAI-like shape: choices[].delta/content/message
-        if (node.has("choices") && node.get("choices").isArray()) {
-            StringBuilder sb = new StringBuilder();
-            for (JsonNode choice : node.get("choices")) {
-                if (choice.has("delta")) {
-                    String s = extractDeltaText(choice.get("delta"));
-                    if (!s.isEmpty()) {
-                        sb.append(s);
-                    }
-                }
-                if (choice.has("message")) {
-                    String s = extractDeltaText(choice.get("message"));
-                    if (!s.isEmpty()) {
-                        sb.append(s);
-                    }
-                }
-                if (choice.has("content")) {
-                    String s = extractDeltaText(choice.get("content"));
-                    if (!s.isEmpty()) {
-                        sb.append(s);
-                    }
-                }
-            }
-            if (sb.length() > 0) {
-                return sb.toString();
-            }
-        }
-
-        // Prefer nested delta.* if present
-        if (node.has("delta")) {
-            String s = extractDeltaText(node.get("delta"));
-            if (!s.isEmpty()) {
-                return s;
-            }
-        }
-
-        // Some schemas embed message with content array
-        if (node.has("message")) {
-            String s = extractDeltaText(node.get("message"));
-            if (!s.isEmpty()) {
-                return s;
-            }
-        }
-
-        // Common text-like keys in streaming payloads
-        String[] keys = new String[] {"text", "output_text", "outputText", "deltaText", "output"};
-        for (String k : keys) {
-            if (!node.has(k)) {
-                continue;
-            }
-            JsonNode v = node.get(k);
-            if (v.isTextual()) {
-                return v.asText();
-            }
-            // Fall through for complex shapes; recursive handling below will pick it up
-        }
-
-        // "content" may be a string, array of parts, or object with text
-        if (node.has("content")) {
-            JsonNode c = node.get("content");
-            if (c.isTextual()) {
-                return c.asText();
-            }
-            if (c.isArray()) {
-                StringBuilder sb = new StringBuilder();
-                for (JsonNode item : c) {
-                    String s = extractDeltaText(item);
-                    if (!s.isEmpty()) {
-                        sb.append(s);
-                    }
-                }
-                if (sb.length() > 0) {
-                    return sb.toString();
-                }
-            }
-            if (c.isObject()) {
-                String s = extractDeltaText(c);
-                if (!s.isEmpty()) {
-                    return s;
-                }
-            }
-        }
-
-        // Generic recursive scan
-        if (node.isArray()) {
-            StringBuilder sb = new StringBuilder();
-            for (JsonNode item : node) {
-                String s = extractDeltaText(item);
-                if (!s.isEmpty()) {
-                    sb.append(s);
-                }
-            }
-            return sb.toString();
-        }
-        if (node.isObject()) {
-            var it = node.fields();
-            while (it.hasNext()) {
-                var e = it.next();
-                String s = extractDeltaText(e.getValue());
-                if (!s.isEmpty()) {
-                    return s;
-                }
-            }
-        }
-        return "";
     }
 
     private GenerativeAiInferenceClient newClient() {

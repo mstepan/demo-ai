@@ -1,14 +1,14 @@
 package com.github.mstepan.demo_ai.evaluators;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.EvaluationResponse;
 import org.springframework.ai.evaluation.Evaluator;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
-import java.util.Map;
 
 /**
  * Evaluator that uses an OCI GenAI-backed ChatClient to decide whether a candidate answer is
@@ -26,42 +26,14 @@ import java.util.Map;
  * @param chatClientBuilder builder used to create ChatClient instances
  */
 @Component("ociGenAIRelevancyEvaluator")
-public record OCIGenAIRelevancyEvaluator(ChatClient.Builder chatClientBuilder)
+public record OCIGenAIRelevancyEvaluator(
+        ChatClient.Builder chatClientBuilder,
+        @Value("classpath:/prompts/relevanceEvaluatorSystemPrompt.st")
+                Resource systemPromptTemplate,
+        @Value("classpath:/prompts/relevanceEvaluatorUserPrompt.st") Resource userPromptTemplate)
         implements Evaluator {
 
-    /**
-     * System prompt that defines the role and strict YES/NO output format for the relevancy
-     * judgment task.
-     */
-    private static final PromptTemplate SYSTEM_PROMPT_TEMPLATE =
-            new PromptTemplate(
-"""
-You are a relevance evaluation assistant.
-
-Your task is to determine whether an answer is relevant to and correctly addresses the given question.
-
-Rules:
-- Respond with exactly one token: YES or NO.
-- Do not include explanations, punctuation, or additional text.
-- Ignore style, grammar, or verbosity; evaluate only relevance and correctness.
-- If the answer does not address the question, is off-topic, or is factually incorrect, respond NO.
-""");
-
-    /**
-     * User prompt template that injects the question and the candidate answer to be judged for
-     * relevance.
-     */
-    private static final PromptTemplate USER_PROMPT_TEMPLATE =
-            new PromptTemplate(
-"""
-Evaluate whether the following answer correctly and directly addresses the question.
-
-Question:
-{question}
-
-Answer:
-{answer}
-""");
+    private static final String EXPECTED_YES_RESPONSE = "yes";
 
     /**
      * Executes the relevancy evaluation by constructing a system and user prompt and delegating the
@@ -74,25 +46,22 @@ Answer:
     @Override
     public EvaluationResponse evaluate(EvaluationRequest evaluationRequest) {
 
-        String systemPrompt = SYSTEM_PROMPT_TEMPLATE.render();
-        String userPrompt =
-                USER_PROMPT_TEMPLATE.render(
-                        Map.of(
-                                "question",
-                                evaluationRequest.getUserText(),
-                                "answer",
-                                evaluationRequest.getResponseContent()));
-
         String evaluationResponse =
                 this.chatClientBuilder
                         .build()
                         .prompt()
-                        .system(systemPrompt)
-                        .user(userPrompt)
+                        .system(systemPromptTemplate)
+                        .user(
+                                userSpec ->
+                                        userSpec.text(userPromptTemplate)
+                                                .param("question", evaluationRequest.getUserText())
+                                                .param(
+                                                        "answer",
+                                                        evaluationRequest.getResponseContent()))
                         .call()
                         .content();
 
-        if ("yes".equalsIgnoreCase(evaluationResponse)) {
+        if (EXPECTED_YES_RESPONSE.equalsIgnoreCase(evaluationResponse)) {
             return new EvaluationResponse(true, 1.0F, "", Collections.emptyMap());
         }
 
