@@ -2,6 +2,7 @@ package com.github.mstepan.demo_ai.oci;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oracle.bmc.ClientConfiguration;
+import com.oracle.bmc.Region;
 import com.oracle.bmc.auth.SessionTokenAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.oracle.bmc.generativeaiinference.model.*;
@@ -13,20 +14,30 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.context.annotation.Primary;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
+
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.invoke.MethodHandles;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Primary
 @Component
-public class OCIChatModel implements ChatModel {
+public class OCIChatModel implements ChatModel, StreamingChatModel {
 
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
@@ -41,7 +52,8 @@ public class OCIChatModel implements ChatModel {
     }
 
     @Override
-    public ChatResponse call(Prompt prompt) {
+    @NonNull
+    public ChatResponse call(@NonNull Prompt prompt) {
         try (GenerativeAiInferenceClient client = newClient()) {
 
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/SystemMessage
@@ -158,6 +170,194 @@ public class OCIChatModel implements ChatModel {
         }
     }
 
+    @Override
+    @NonNull
+    public Flux<ChatResponse> stream(@NonNull Prompt prompt) {
+        return Flux.<ChatResponse>create(
+                        sink -> {
+                            try (GenerativeAiInferenceClient client = newClient()) {
+                                // Build messages (system + user) same as non-streaming
+                                SystemMessage systemPrompt =
+                                        SystemMessage.builder()
+                                                .content(
+                                                        List.of(
+                                                                TextContent.builder()
+                                                                        .text(
+                                                                                prompt.getSystemMessage()
+                                                                                        .getText())
+                                                                        .build()))
+                                                .build();
+
+                                UserMessage userQuery =
+                                        UserMessage.builder()
+                                                .content(
+                                                        List.of(
+                                                                TextContent.builder()
+                                                                        .text(
+                                                                                prompt.getUserMessage()
+                                                                                        .getText())
+                                                                        .build()))
+                                                .build();
+
+                                // Enable streaming
+                                GenericChatRequest genericChatRequest =
+                                        GenericChatRequest.builder()
+                                                .messages(List.of(systemPrompt, userQuery))
+                                                .temperature(properties.temperature())
+                                                //
+                                                // .maxTokens(properties.maxTokens())
+                                                .isEcho(false)
+                                                .isStream(true)
+                                                .build();
+
+                                ChatDetails chatDetails =
+                                        ChatDetails.builder()
+                                                .compartmentId(properties.compartment())
+                                                .servingMode(
+                                                        OnDemandServingMode.builder()
+                                                                .modelId(properties.model())
+                                                                .build())
+                                                .chatRequest(genericChatRequest)
+                                                .build();
+
+                                ChatRequest chatRequest =
+                                        ChatRequest.builder().chatDetails(chatDetails).build();
+
+                                if (LOGGER.isDebugEnabled()) {
+                                    String rawJson =
+                                            JSON_MAPPER
+                                                    .writerWithDefaultPrettyPrinter()
+                                                    .writeValueAsString(
+                                                            buildLoggableRequest(chatDetails));
+                                    logLLMInteraction(RequestDirection.OUT_BOUND, rawJson);
+                                }
+
+                                // Call the API with streaming enabled
+                                Object responseObj = client.chat(chatRequest);
+
+                                InputStream is = eventStream(responseObj);
+
+                                AtomicBoolean firstChunkLogged = new AtomicBoolean(false);
+
+                                try (BufferedReader reader =
+                                        new BufferedReader(
+                                                new InputStreamReader(
+                                                        is, StandardCharsets.UTF_8))) {
+                                    StringBuilder partial = new StringBuilder();
+                                    String line;
+                                    while ((line = reader.readLine()) != null) {
+                                        // SSE lines may include comments or blank lines. We only
+                                        // care about 'data:' lines.
+                                        if (line.isEmpty() || line.startsWith(":")) {
+                                            continue;
+                                        }
+
+                                        if (line.startsWith("data:")) {
+                                            String data = line.substring("data:".length()).trim();
+                                            if ("[DONE]".equalsIgnoreCase(data)) {
+                                                break; // end of stream
+                                            }
+
+                                            try {
+                                                // Each event is a JSON object; parse it
+                                                // structurally.
+                                                @SuppressWarnings("unchecked")
+                                                Map<String, Object> event =
+                                                        JSON_MAPPER.readValue(data, Map.class);
+
+                                                // Extract text delta from the event payload, robust
+                                                // to schema variations.
+                                                String delta = extractTextDelta(event);
+                                                if (delta != null && !delta.isEmpty()) {
+                                                    partial.append(delta);
+
+                                                    if (LOGGER.isDebugEnabled()
+                                                            && firstChunkLogged.compareAndSet(
+                                                                    false, true)) {
+                                                        logLLMInteraction(
+                                                                RequestDirection.IN_BOUND, data);
+                                                    }
+
+                                                    AssistantMessage assistantMsg =
+                                                            new AssistantMessage(delta);
+                                                    ChatResponse cr =
+                                                            ChatResponse.builder()
+                                                                    .generations(
+                                                                            List.of(
+                                                                                    new Generation(
+                                                                                            assistantMsg)))
+                                                                    .build();
+                                                    sink.next(cr);
+                                                }
+                                            } catch (Exception parseEx) {
+                                                if (LOGGER.isDebugEnabled()) {
+                                                    LOGGER.debug(
+                                                            "Failed to parse streaming event line: {}",
+                                                            line,
+                                                            parseEx);
+                                                }
+                                                // Ignore malformed lines but continue the stream.
+                                            }
+                                        }
+                                    }
+
+                                    // When the stream ends, complete.
+                                    sink.complete();
+                                }
+                            } catch (Exception ex) {
+                                LOGGER.error("OCI GenAI streaming call failed", ex);
+                                sink.error(ex);
+                            }
+                        })
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private static InputStream eventStream(Object responseObj) {
+        if (responseObj
+                instanceof
+                com.oracle.bmc.generativeaiinference.responses.ChatResponse chatResponse) {
+            return chatResponse.getEventStream();
+        }
+
+        throw new IllegalStateException(
+                "responseObj is not of type com.oracle.bmc.generativeaiinference.responses.ChatResponse");
+    }
+
+    /**
+     * Extract text delta from a streaming event JSON. This method is tolerant to schema variations
+     * by scanning for the first reachable "text" string value.
+     */
+    @SuppressWarnings("unchecked")
+    private static String extractTextDelta(Map<String, Object> event) {
+        Object res = findFirstText(event);
+        return res instanceof String s ? s : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object findFirstText(Object node) {
+        if (node instanceof Map) {
+            for (var entry : ((Map<String, Object>) node).entrySet()) {
+                String key = entry.getKey();
+                Object val = entry.getValue();
+                if ("text".equalsIgnoreCase(key) && val instanceof String) {
+                    return val;
+                }
+                Object nested = findFirstText(val);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        } else if (node instanceof List) {
+            for (Object item : (List<?>) node) {
+                Object nested = findFirstText(item);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        }
+        return null;
+    }
+
     enum RequestDirection {
         OUT_BOUND,
         IN_BOUND
@@ -201,9 +401,8 @@ public class OCIChatModel implements ChatModel {
                             .build(authProvider);
             //
             // TODO: we can also use region insteadof or URL below
-            //
-            //            client.setRegion(Region.fromRegionId(properties.region()));
-            client.setEndpoint(properties.baseUrl());
+            client.setRegion(Region.US_CHICAGO_1);
+            //            client.setEndpoint(properties.baseUrl());
             return client;
         } catch (IOException ioEx) {
             throw new IllegalStateException(ioEx);
@@ -279,16 +478,12 @@ public class OCIChatModel implements ChatModel {
     }
 
     private static String getRole(Message m) {
-        String role;
-        if (m instanceof SystemMessage) {
-            role = "system";
-        } else if (m instanceof UserMessage) {
-            role = "user";
-        } else if (m instanceof com.oracle.bmc.generativeaiinference.model.AssistantMessage) {
-            role = "assistant";
-        } else {
-            role = m.getClass().getSimpleName();
-        }
-        return role;
+        return switch (m) {
+            case SystemMessage systemMessage -> "system";
+            case UserMessage userMessage -> "user";
+            case com.oracle.bmc.generativeaiinference.model.AssistantMessage assistantMessage ->
+                    "assistant";
+            default -> m.getClass().getSimpleName();
+        };
     }
 }

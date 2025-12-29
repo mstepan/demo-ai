@@ -1,9 +1,9 @@
 package com.github.mstepan.demo_ai.oci;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.DecimalMax;
 
 import org.hibernate.validator.constraints.time.DurationMax;
 import org.hibernate.validator.constraints.time.DurationMin;
@@ -29,14 +29,11 @@ public record OCIGenAiProperties(
                 @Pattern(
                         regexp = COMPARTMENT_OCID_REGEX,
                         message = "compartment must be a valid OCI compartment OCID")
-                String
-                        compartment, // e.g.
-                                     // ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa
+                String compartment, // e.g.
+        // ocid1.compartment.oc1..aaaaaaaadwjibfornz4simrjcqftsoxvnyn5syxqklv76e5rjmbucvkbvuwa
         @NotBlank String model,
-        @DecimalMin("0.0") @DecimalMax("2.0") @DefaultValue("1.0")
-                Double temperature,
-        @DefaultValue("2048")
-                Integer maxTokens,
+        @DecimalMin("0.0") @DecimalMax("2.0") @DefaultValue("1.0") Double temperature,
+        @DefaultValue("8192") Integer maxTokens,
         @DurationMin(seconds = 5) @DurationMax(seconds = 60) @DefaultValue("10s")
                 Duration connectionTimeout,
         @DurationMin(seconds = 5) @DurationMax(seconds = 120) @DefaultValue("60s")
