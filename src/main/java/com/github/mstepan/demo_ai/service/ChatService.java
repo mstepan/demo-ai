@@ -4,7 +4,10 @@ import com.github.mstepan.demo_ai.evaluators.AnswerNotRelevantException;
 import com.github.mstepan.demo_ai.web.Answer;
 import com.github.mstepan.demo_ai.web.Question;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,8 +19,13 @@ import org.springframework.stereotype.Service;
 
 import reactor.core.publisher.Flux;
 
+import java.lang.invoke.MethodHandles;
+
 @Service
 public class ChatService {
+
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final ChatClient chatClient;
 
@@ -40,7 +48,7 @@ public class ChatService {
 
     @Retryable(retryFor = AnswerNotRelevantException.class, maxAttempts = 2)
     public Answer askQuestion(Question question) {
-        var answerText =
+        var chatResponse =
                 chatClient
                         .prompt()
                         .system(systemPromptTemplate)
@@ -49,23 +57,44 @@ public class ChatService {
                                         userSpec.text(userPromptTemplate)
                                                 .param("question", question.question()))
                         .call()
-                        .content();
+                        .chatResponse();
+
+        if (chatResponse == null) {
+            return new Answer("No answer");
+        }
+
+        var usage = chatResponse.getMetadata().getUsage();
+        LOGGER.info(
+                "Token usage: prompt = {}, generation = {}, total = {}",
+                usage.getPromptTokens(),
+                usage.getCompletionTokens(),
+                usage.getTotalTokens());
+
+        var answerText = chatResponse.getResult().getOutput().getText();
 
         evaluateRelevancy(question.question(), answerText);
 
         return new Answer(answerText);
     }
 
+    private static String textResponse(ChatResponse chatResponse) {
+        if (chatResponse == null) {
+            return "";
+        } else {
+            return chatResponse.getResult().getOutput().getText();
+        }
+    }
+
     public Flux<String> askQuestionStreaming(Question question) {
         return chatClient
-                        .prompt()
-                        .system(systemPromptTemplate)
-                        .user(
-                                userSpec ->
-                                        userSpec.text(userPromptTemplate)
-                                                .param("question", question.question()))
-                        .stream()
-                        .content();
+                .prompt()
+                .system(systemPromptTemplate)
+                .user(
+                        userSpec ->
+                                userSpec.text(userPromptTemplate)
+                                        .param("question", question.question()))
+                .stream()
+                .content();
     }
 
     @Recover
