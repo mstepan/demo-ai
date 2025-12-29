@@ -30,7 +30,7 @@ public class OCIChatModel implements ChatModel {
 
     private static final Logger LOGGER =
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
     private final OCIGenAiProperties properties;
     private static final int DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
@@ -91,7 +91,8 @@ public class OCIChatModel implements ChatModel {
 
             if (LOGGER.isDebugEnabled()) {
                 String rawJson =
-                        JSON.writerWithDefaultPrettyPrinter()
+                        JSON_MAPPER
+                                .writerWithDefaultPrettyPrinter()
                                 .writeValueAsString(buildLoggableRequest(chatDetails));
                 logLLMInteraction(RequestDirection.OUT_BOUND, rawJson);
             }
@@ -105,7 +106,8 @@ public class OCIChatModel implements ChatModel {
 
                 if (LOGGER.isDebugEnabled()) {
                     String rawJson =
-                            JSON.writerWithDefaultPrettyPrinter()
+                            JSON_MAPPER
+                                    .writerWithDefaultPrettyPrinter()
                                     .writeValueAsString(response.getChatResult());
 
                     logLLMInteraction(RequestDirection.IN_BOUND, rawJson);

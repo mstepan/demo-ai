@@ -4,8 +4,6 @@ import com.github.mstepan.demo_ai.evaluators.AnswerNotRelevantException;
 import com.github.mstepan.demo_ai.web.Answer;
 import com.github.mstepan.demo_ai.web.Question;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;
@@ -16,13 +14,10 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
-import java.lang.invoke.MethodHandles;
+import reactor.core.publisher.Flux;
 
 @Service
 public class ChatService {
-
-    private static final Logger LOGGER =
-            LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     private final ChatClient chatClient;
 
@@ -59,6 +54,18 @@ public class ChatService {
         evaluateRelevancy(question.question(), answerText);
 
         return new Answer(answerText);
+    }
+
+    public Flux<String> askQuestionStreaming(Question question) {
+        return chatClient
+                        .prompt()
+                        .system(systemPromptTemplate)
+                        .user(
+                                userSpec ->
+                                        userSpec.text(userPromptTemplate)
+                                                .param("question", question.question()))
+                        .stream()
+                        .content();
     }
 
     @Recover

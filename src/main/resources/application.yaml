@@ -43,7 +43,7 @@ oci:
     # ================ OpenAI ================
     # openai.gpt-oss-20b
     # openai.gpt-oss-120b  <-- best
-    model: openai.gpt-oss-120b
+    model: meta.llama-4-maverick-17b-128e-instruct-fp8
 
 server:
   port: 7171

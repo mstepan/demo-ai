@@ -41,7 +41,10 @@ Logo generated using [patorjk](https://patorjk.com/software/taag) and `Standard`
 ### Simple request-reply
 
 ```bash
-curl -H "Content-Type: application/json" -X POST --data '{"question":"Write fairy tail about pirates. No more than 10 sentences.","stream":true}' http://localhost:7171/ask
+curl -H "Content-Type: application/json" \
+  -X POST \
+  --data '{"question":"Write fairy tail about pirates. No more than 10 sentences."}' \
+  http://localhost:7171/ask
 
 ```
 
