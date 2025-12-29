@@ -57,7 +57,7 @@ public record OCIGenAIFactsEvaluator(
     @Override
     public EvaluationResponse evaluate(EvaluationRequest evaluationRequest) {
 
-        String evaluationResponse =
+        var evaluationResult =
                 this.chatClientBuilder
                         .build()
                         .prompt()
@@ -68,8 +68,8 @@ public record OCIGenAIFactsEvaluator(
                                                 .param("claim", evaluationRequest.getUserText())
                                                 .param("document", FACTS))
                         .call()
-                        .content();
-        boolean passing = EXPECTED_YES_RESPONSE.equalsIgnoreCase(evaluationResponse);
-        return new EvaluationResponse(passing, "", Collections.emptyMap());
+                        .entity(EvaluationResult.class);
+
+        return new EvaluationResponse(evaluationResult.relevant(), "", Collections.emptyMap());
     }
 }

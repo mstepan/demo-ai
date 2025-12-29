@@ -2,7 +2,6 @@ package com.github.mstepan.demo_ai.evaluators;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.evaluation.EvaluationRequest;
-import org.springframework.ai.evaluation.EvaluationResponse;
 import org.springframework.ai.evaluation.Evaluator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -34,8 +33,6 @@ public record OCIGenAIRelevancyEvaluator(
                 Resource userPromptTemplate)
         implements Evaluator {
 
-    private static final String EXPECTED_YES_RESPONSE = "yes";
-
     /**
      * Executes the relevancy evaluation by constructing a system and user prompt and delegating the
      * judgment to the underlying chat model.
@@ -45,9 +42,10 @@ public record OCIGenAIRelevancyEvaluator(
      * @return EvaluationResponse with pass/fail and score (1.0 or 0.0)
      */
     @Override
-    public EvaluationResponse evaluate(EvaluationRequest evaluationRequest) {
+    public org.springframework.ai.evaluation.EvaluationResponse evaluate(
+            EvaluationRequest evaluationRequest) {
 
-        String evaluationResponse =
+        var evaluationResult =
                 this.chatClientBuilder
                         .build()
                         .prompt()
@@ -60,12 +58,14 @@ public record OCIGenAIRelevancyEvaluator(
                                                         "answer",
                                                         evaluationRequest.getResponseContent()))
                         .call()
-                        .content();
+                        .entity(EvaluationResult.class);
 
-        if (EXPECTED_YES_RESPONSE.equalsIgnoreCase(evaluationResponse)) {
-            return new EvaluationResponse(true, 1.0F, "", Collections.emptyMap());
+        if (evaluationResult.relevant()) {
+            return new org.springframework.ai.evaluation.EvaluationResponse(
+                    true, 1.0F, "", Collections.emptyMap());
         }
 
-        return new EvaluationResponse(false, 0.0F, "", Collections.emptyMap());
+        return new org.springframework.ai.evaluation.EvaluationResponse(
+                false, 0.0F, "", Collections.emptyMap());
     }
 }

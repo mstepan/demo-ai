@@ -12,7 +12,7 @@
           "content": [
             {
               "type": "TEXT",
-              "text": "YES"
+              "text": "{\"relevant\": true}"
             }
           ],
           "name": null,
