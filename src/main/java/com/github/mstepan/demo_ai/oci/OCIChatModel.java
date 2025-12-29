@@ -1,9 +1,6 @@
 package com.github.mstepan.demo_ai.oci;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.oracle.bmc.ClientConfiguration;
-import com.oracle.bmc.Region;
-import com.oracle.bmc.auth.SessionTokenAuthenticationDetailsProvider;
 import com.oracle.bmc.generativeaiinference.GenerativeAiInferenceClient;
 import com.oracle.bmc.generativeaiinference.model.*;
 import com.oracle.bmc.generativeaiinference.requests.ChatRequest;
@@ -23,17 +20,8 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.invoke.MethodHandles;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Primary
 @Component
@@ -43,18 +31,26 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
             LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
+    private final GenAiClientFactoryFactory clientConfig;
+    private final OCILogService logService;
     private final OCIGenAiProperties properties;
-    private static final int DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
-    private static final int DEFAULT_READ_TIMEOUT_MS = 60_000;
+    private final OCIGenAiStreamingSinkFactory streamingSinkFactory;
 
-    public OCIChatModel(OCIGenAiProperties properties) {
+    public OCIChatModel(
+            GenAiClientFactoryFactory clientConfig,
+            OCILogService logService,
+            OCIGenAiProperties properties,
+            OCIGenAiStreamingSinkFactory streamingSinkFactory) {
+        this.clientConfig = clientConfig;
+        this.logService = logService;
         this.properties = properties;
+        this.streamingSinkFactory = streamingSinkFactory;
     }
 
     @Override
     @NonNull
     public ChatResponse call(@NonNull Prompt prompt) {
-        try (GenerativeAiInferenceClient client = newClient()) {
+        try (GenerativeAiInferenceClient client = clientConfig.newClient()) {
 
             // https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai-inference/20231130/datatypes/SystemMessage
             SystemMessage systemPrompt =
@@ -105,8 +101,8 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
                 String rawJson =
                         JSON_MAPPER
                                 .writerWithDefaultPrettyPrinter()
-                                .writeValueAsString(buildLoggableRequest(chatDetails));
-                logLLMInteraction(RequestDirection.OUT_BOUND, rawJson);
+                                .writeValueAsString(logService.buildLoggableRequest(chatDetails));
+                logService.logLLMInteraction(RequestDirection.OUT_BOUND, rawJson);
             }
 
             // Send request to the LLM
@@ -122,7 +118,7 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
                                     .writerWithDefaultPrettyPrinter()
                                     .writeValueAsString(response.getChatResult());
 
-                    logLLMInteraction(RequestDirection.IN_BOUND, rawJson);
+                    logService.logLLMInteraction(RequestDirection.IN_BOUND, rawJson);
                 }
 
                 if (response.getChatResult().getChatResponse()
@@ -173,315 +169,12 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
     @Override
     @NonNull
     public Flux<ChatResponse> stream(@NonNull Prompt prompt) {
-        return Flux.<ChatResponse>create(
-                        sink -> {
-                            try (GenerativeAiInferenceClient client = newClient()) {
-                                // Build messages (system + user) same as non-streaming
-                                SystemMessage systemPrompt =
-                                        SystemMessage.builder()
-                                                .content(
-                                                        List.of(
-                                                                TextContent.builder()
-                                                                        .text(
-                                                                                prompt.getSystemMessage()
-                                                                                        .getText())
-                                                                        .build()))
-                                                .build();
-
-                                UserMessage userQuery =
-                                        UserMessage.builder()
-                                                .content(
-                                                        List.of(
-                                                                TextContent.builder()
-                                                                        .text(
-                                                                                prompt.getUserMessage()
-                                                                                        .getText())
-                                                                        .build()))
-                                                .build();
-
-                                // Enable streaming
-                                GenericChatRequest genericChatRequest =
-                                        GenericChatRequest.builder()
-                                                .messages(List.of(systemPrompt, userQuery))
-                                                .temperature(properties.temperature())
-                                                .isEcho(false)
-                                                .isStream(true)
-                                                .build();
-
-                                ChatDetails chatDetails =
-                                        ChatDetails.builder()
-                                                .compartmentId(properties.compartment())
-                                                .servingMode(
-                                                        OnDemandServingMode.builder()
-                                                                .modelId(properties.model())
-                                                                .build())
-                                                .chatRequest(genericChatRequest)
-                                                .build();
-
-                                ChatRequest chatRequest =
-                                        ChatRequest.builder().chatDetails(chatDetails).build();
-
-                                if (LOGGER.isDebugEnabled()) {
-                                    String rawJson =
-                                            JSON_MAPPER
-                                                    .writerWithDefaultPrettyPrinter()
-                                                    .writeValueAsString(
-                                                            buildLoggableRequest(chatDetails));
-                                    logLLMInteraction(RequestDirection.OUT_BOUND, rawJson);
-                                }
-
-                                // Call the API with streaming enabled
-                                Object responseObj = client.chat(chatRequest);
-
-                                InputStream is = eventStream(responseObj);
-
-                                AtomicBoolean firstChunkLogged = new AtomicBoolean(false);
-
-                                try (BufferedReader reader =
-                                        new BufferedReader(
-                                                new InputStreamReader(
-                                                        is, StandardCharsets.UTF_8))) {
-                                    StringBuilder partial = new StringBuilder();
-                                    String line;
-                                    while ((line = reader.readLine()) != null) {
-                                        // SSE lines may include comments or blank lines. We only
-                                        // care about 'data:' lines.
-                                        if (line.isEmpty() || line.startsWith(":")) {
-                                            continue;
-                                        }
-
-                                        if (line.startsWith("data:")) {
-                                            String data = line.substring("data:".length()).trim();
-                                            if ("[DONE]".equalsIgnoreCase(data)) {
-                                                break; // end of stream
-                                            }
-
-                                            try {
-                                                // Each event is a JSON object; parse it
-                                                // structurally.
-                                                @SuppressWarnings("unchecked")
-                                                Map<String, Object> event =
-                                                        JSON_MAPPER.readValue(data, Map.class);
-
-                                                // Extract text delta from the event payload, robust
-                                                // to schema variations.
-                                                String delta = extractTextDelta(event);
-                                                if (delta != null && !delta.isEmpty()) {
-                                                    partial.append(delta);
-
-                                                    if (LOGGER.isDebugEnabled()
-                                                            && firstChunkLogged.compareAndSet(
-                                                                    false, true)) {
-                                                        logLLMInteraction(
-                                                                RequestDirection.IN_BOUND, data);
-                                                    }
-
-                                                    AssistantMessage assistantMsg =
-                                                            new AssistantMessage(delta);
-                                                    ChatResponse cr =
-                                                            ChatResponse.builder()
-                                                                    .generations(
-                                                                            List.of(
-                                                                                    new Generation(
-                                                                                            assistantMsg)))
-                                                                    .build();
-                                                    sink.next(cr);
-                                                }
-                                            } catch (Exception parseEx) {
-                                                if (LOGGER.isDebugEnabled()) {
-                                                    LOGGER.debug(
-                                                            "Failed to parse streaming event line: {}",
-                                                            line,
-                                                            parseEx);
-                                                }
-                                                // Ignore malformed lines but continue the stream.
-                                            }
-                                        }
-                                    }
-
-                                    // When the stream ends, complete.
-                                    sink.complete();
-                                }
-                            } catch (Exception ex) {
-                                LOGGER.error("OCI GenAI streaming call failed", ex);
-                                sink.error(ex);
-                            }
-                        })
+        return Flux.<ChatResponse>create(streamingSinkFactory.newInstance(prompt))
                 .subscribeOn(Schedulers.boundedElastic());
-    }
-
-    private static InputStream eventStream(Object responseObj) {
-        if (responseObj
-                instanceof
-                com.oracle.bmc.generativeaiinference.responses.ChatResponse chatResponse) {
-            return chatResponse.getEventStream();
-        }
-
-        throw new IllegalStateException(
-                "responseObj is not of type com.oracle.bmc.generativeaiinference.responses.ChatResponse");
-    }
-
-    /**
-     * Extract text delta from a streaming event JSON. This method is tolerant to schema variations
-     * by scanning for the first reachable "text" string value.
-     */
-    @SuppressWarnings("unchecked")
-    private static String extractTextDelta(Map<String, Object> event) {
-        Object res = findFirstText(event);
-        return res instanceof String s ? s : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Object findFirstText(Object node) {
-        if (node instanceof Map) {
-            for (var entry : ((Map<String, Object>) node).entrySet()) {
-                String key = entry.getKey();
-                Object val = entry.getValue();
-                if ("text".equalsIgnoreCase(key) && val instanceof String) {
-                    return val;
-                }
-                Object nested = findFirstText(val);
-                if (nested != null) {
-                    return nested;
-                }
-            }
-        } else if (node instanceof List) {
-            for (Object item : (List<?>) node) {
-                Object nested = findFirstText(item);
-                if (nested != null) {
-                    return nested;
-                }
-            }
-        }
-        return null;
     }
 
     enum RequestDirection {
         OUT_BOUND,
         IN_BOUND
-    }
-
-    private static void logLLMInteraction(RequestDirection direction, String logMsg) {
-        if (LOGGER.isDebugEnabled()) {
-            if (direction == RequestDirection.OUT_BOUND) {
-                LOGGER.debug("APP ==========> LLM");
-            } else {
-                LOGGER.debug("APP <========== LLM");
-            }
-
-            LOGGER.debug("{}", logMsg);
-        }
-    }
-
-    private GenerativeAiInferenceClient newClient() {
-        try {
-            var authProvider = new SessionTokenAuthenticationDetailsProvider(properties.profile());
-
-            int connectionTimeoutMs =
-                    (properties.connectionTimeout() != null)
-                            ? (int) properties.connectionTimeout().toMillis()
-                            : DEFAULT_CONNECTION_TIMEOUT_MS;
-
-            int readTimeoutMs =
-                    (properties.readTimeout() != null)
-                            ? (int) properties.readTimeout().toMillis()
-                            : DEFAULT_READ_TIMEOUT_MS;
-
-            var clientConfig =
-                    ClientConfiguration.builder()
-                            .connectionTimeoutMillis(connectionTimeoutMs)
-                            .readTimeoutMillis(readTimeoutMs)
-                            .build();
-
-            var client =
-                    GenerativeAiInferenceClient.builder()
-                            .configuration(clientConfig)
-                            .build(authProvider);
-            //
-            // TODO: we can also use region insteadof or URL below
-            client.setRegion(Region.US_CHICAGO_1);
-            //            client.setEndpoint(properties.baseUrl());
-            return client;
-        } catch (IOException ioEx) {
-            throw new IllegalStateException(ioEx);
-        }
-    }
-
-    private static Object buildLoggableRequest(ChatDetails chatDetails) {
-        Map<String, Object> root = new LinkedHashMap<>();
-        if (chatDetails == null) {
-            return root;
-        }
-
-        root.put("compartmentId", chatDetails.getCompartmentId());
-
-        Map<String, Object> serving = new LinkedHashMap<>();
-        if (chatDetails.getServingMode() instanceof OnDemandServingMode sm) {
-            serving.put("modelId", sm.getModelId());
-        } else if (chatDetails.getServingMode() != null) {
-            serving.put("servingModeType", chatDetails.getServingMode().getClass().getSimpleName());
-        } else {
-            serving.put("servingModeType", null);
-        }
-        root.put("servingMode", serving);
-
-        Map<String, Object> req = new LinkedHashMap<>();
-        if (chatDetails.getChatRequest() instanceof GenericChatRequest gcr) {
-            List<Object> messages = new ArrayList<>();
-            if (gcr.getMessages() != null) {
-                for (var m : gcr.getMessages()) {
-                    Map<String, Object> mm = new LinkedHashMap<>();
-                    String role = getRole(m);
-                    mm.put("role", role);
-
-                    List<Object> contentList = new ArrayList<>();
-                    if (m.getContent() != null) {
-                        for (var c : m.getContent()) {
-                            Map<String, Object> cc = new LinkedHashMap<>();
-                            if (c instanceof TextContent tc) {
-                                cc.put("type", "text");
-                                cc.put("text", tc.getText());
-                            } else if (c instanceof ImageContent ic) {
-                                cc.put("type", "image");
-                                cc.put("url", ic.getImageUrl());
-                            } else {
-                                cc.put("type", c.getClass().getSimpleName());
-                            }
-                            contentList.add(cc);
-                        }
-                    }
-                    mm.put("content", contentList);
-                    messages.add(mm);
-                }
-            }
-            req.put("messages", messages);
-            req.put("isStream", gcr.getIsStream());
-            req.put("numGenerations", gcr.getNumGenerations());
-            req.put("seed", gcr.getSeed());
-            req.put("isEcho", gcr.getIsEcho());
-            req.put("topK", gcr.getTopK());
-            req.put("topP", gcr.getTopP());
-            req.put("temperature", gcr.getTemperature());
-            req.put("frequencyPenalty", gcr.getFrequencyPenalty());
-            req.put("presencePenalty", gcr.getPresencePenalty());
-            req.put("stop", gcr.getStop());
-            req.put("logProbs", gcr.getLogProbs());
-            req.put("maxTokens", gcr.getMaxTokens());
-            req.put("logitBias", gcr.getLogitBias());
-            req.put("toolChoice", gcr.getToolChoice());
-            req.put("tools", gcr.getTools());
-        }
-        root.put("chatRequest", req);
-        return root;
-    }
-
-    private static String getRole(Message m) {
-        return switch (m) {
-            case SystemMessage systemMessage -> "system";
-            case UserMessage userMessage -> "user";
-            case com.oracle.bmc.generativeaiinference.model.AssistantMessage assistantMessage ->
-                    "assistant";
-            default -> m.getClass().getSimpleName();
-        };
     }
 }
