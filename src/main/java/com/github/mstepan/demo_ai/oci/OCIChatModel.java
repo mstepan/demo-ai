@@ -204,8 +204,6 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
                                         GenericChatRequest.builder()
                                                 .messages(List.of(systemPrompt, userQuery))
                                                 .temperature(properties.temperature())
-                                                //
-                                                // .maxTokens(properties.maxTokens())
                                                 .isEcho(false)
                                                 .isStream(true)
                                                 .build();
