@@ -7,6 +7,7 @@ import com.github.mstepan.demo_ai.web.Question;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.metadata.EmptyUsage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;
@@ -63,12 +64,7 @@ public class ChatService {
             return new Answer("No answer");
         }
 
-        var usage = chatResponse.getMetadata().getUsage();
-        LOGGER.info(
-                "Token usage: prompt = {}, generation = {}, total = {}",
-                usage.getPromptTokens(),
-                usage.getCompletionTokens(),
-                usage.getTotalTokens());
+        logUsageMetadata(chatResponse);
 
         var answerText = chatResponse.getResult().getOutput().getText();
 
@@ -77,11 +73,20 @@ public class ChatService {
         return new Answer(answerText);
     }
 
-    private static String textResponse(ChatResponse chatResponse) {
-        if (chatResponse == null) {
-            return "";
-        } else {
-            return chatResponse.getResult().getOutput().getText();
+    private static void logUsageMetadata(ChatResponse chatResponse) {
+        if (chatResponse.getMetadata().getUsage() != null) {
+            var usage = chatResponse.getMetadata().getUsage();
+
+            if (usage instanceof EmptyUsage) {
+                LOGGER.info("Token usage: EMPTY");
+                return;
+            }
+
+            LOGGER.info(
+                    "Token usage: prompt = {}, generation = {}, total = {}",
+                    usage.getPromptTokens(),
+                    usage.getCompletionTokens(),
+                    usage.getTotalTokens());
         }
     }
 
