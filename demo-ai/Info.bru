@@ -1,0 +1,11 @@
+meta {
+  name: Info
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{BASE_URL}}/actuator/info
+  body: json
+  auth: inherit
+}

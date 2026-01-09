@@ -58,6 +58,37 @@ curl -N -H "Accept: application/x-ndjson" \
 
 ```
 
+## Observability
+
+Health (returns {"status":"UP"}):
+```bash
+curl -s http://localhost:7171/actuator/health | jq
+```
+
+Info (application metadata):
+```bash
+curl -s http://localhost:7171/actuator/info | jq
+```
+
+Prometheus scrape endpoint (text exposition format):
+```bash
+curl -s http://localhost:7171/actuator/prometheus | head -n 40
+```
+
+JSON metrics (stable across environments), list a specific meter:
+```bash
+curl -s "http://localhost:7171/actuator/metrics/http.server.requests" | jq
+```
+
+Notes:
+- Metrics appear only after traffic has been served. Generate requests (e.g., POST /ask and POST /ask/stream) before scraping.
+- Metric tags are bounded for cardinality; avoid sending sensitive data to metrics.
+- Production hardening recommendations:
+  - Restrict exposed actuator endpoints via management.endpoints.web.exposure.include
+  - Optionally bind management server to a dedicated port (management.server.port) and restrict access
+  - Apply network policies or authentication/authorization per environment policy
+  - Disable verbose/exporters not needed for production
+
 ## References
 
 * [Prompting Guide](https://www.promptingguide.ai/)

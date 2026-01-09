@@ -19,6 +19,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import reactor.core.publisher.Flux;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 import java.lang.invoke.MethodHandles;
 
@@ -35,42 +37,64 @@ public class ChatService {
     private final Resource systemPromptTemplate;
 
     private final Resource userPromptTemplate;
+    private final MeterRegistry meterRegistry;
 
     public ChatService(
             ChatClient.Builder chatClientBuilder,
             @Qualifier("ociGenAIRelevancyEvaluator") Evaluator evaluator,
             @Value("classpath:/prompts/chat/chatSystemPrompt.st") Resource systemPromptTemplate,
-            @Value("classpath:/prompts/chat/chatUserPrompt.st") Resource userPromptTemplate) {
+            @Value("classpath:/prompts/chat/chatUserPrompt.st") Resource userPromptTemplate,
+            MeterRegistry meterRegistry) {
         this.chatClient = chatClientBuilder.build();
         this.evaluator = evaluator;
         this.systemPromptTemplate = systemPromptTemplate;
         this.userPromptTemplate = userPromptTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
+    /**
+     * Handles non-streaming chat requests.
+     * Metrics (Prometheus/Micrometer):
+     * - app_oci_chat_latency_seconds (Timer): end-to-end latency of upstream OCI call
+     * - app_oci_chat_success_total (Counter): increments on successful answer after relevancy eval
+     * - app_oci_chat_failures_total (Counter): increments on failures (exceptions or invalid responses)
+     * Notes:
+     * - Keep metric tag values low-cardinality to avoid cardinality explosions.
+     */
     @Retryable(retryFor = AnswerNotRelevantException.class, maxAttempts = 2)
     public Answer askQuestion(Question question) {
-        var chatResponse =
-                chatClient
-                        .prompt()
-                        .system(systemPromptTemplate)
-                        .user(
-                                userSpec ->
-                                        userSpec.text(userPromptTemplate)
-                                                .param("question", question.question()))
-                        .call()
-                        .chatResponse();
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            var chatResponse =
+                    chatClient
+                            .prompt()
+                            .system(systemPromptTemplate)
+                            .user(
+                                    userSpec ->
+                                            userSpec.text(userPromptTemplate)
+                                                    .param("question", question.question()))
+                            .call()
+                            .chatResponse();
 
-        if (chatResponse == null) {
-            return new Answer("No answer");
+            if (chatResponse == null) {
+                meterRegistry.counter("app_oci_chat_failures_total").increment();
+                return new Answer("No answer");
+            }
+
+            logUsageMetadata(chatResponse);
+
+            var answerText = chatResponse.getResult().getOutput().getText();
+
+            evaluateRelevancy(question.question(), answerText);
+
+            meterRegistry.counter("app_oci_chat_success_total").increment();
+            return new Answer(answerText);
+        } catch (RuntimeException ex) {
+            meterRegistry.counter("app_oci_chat_failures_total").increment();
+            throw ex;
+        } finally {
+            sample.stop(Timer.builder("app_oci_chat_latency_seconds").register(meterRegistry));
         }
-
-        logUsageMetadata(chatResponse);
-
-        var answerText = chatResponse.getResult().getOutput().getText();
-
-        evaluateRelevancy(question.question(), answerText);
-
-        return new Answer(answerText);
     }
 
     private static void logUsageMetadata(ChatResponse chatResponse) {
@@ -104,11 +128,24 @@ public class ChatService {
 
     @Recover
     public Answer recover(AnswerNotRelevantException ex) {
+        // Track recoveries/retry occurrences with bounded tag values
+        meterRegistry
+                .counter("app_llm_retries_total", "reason", "AnswerNotRelevantException")
+                .increment();
         return new Answer("Can't find answer to your question.");
     }
 
     private void evaluateRelevancy(String questionText, String answerText) {
-        if (!evaluator.evaluate(new EvaluationRequest(questionText, answerText)).isPass()) {
+        boolean pass = evaluator.evaluate(new EvaluationRequest(questionText, answerText)).isPass();
+        // Bounded cardinality tag: outcome in {"yes","no"}
+        meterRegistry
+                .counter("app_evaluator_relevancy_total", "outcome", pass ? "yes" : "no")
+                .increment();
+        if (!pass) {
+            // Count a retry-triggering failure attempt
+            meterRegistry
+                    .counter("app_llm_retries_total", "reason", "AnswerNotRelevantException")
+                    .increment();
             throw new AnswerNotRelevantException(questionText, answerText);
         }
     }

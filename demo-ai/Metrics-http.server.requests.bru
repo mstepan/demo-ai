@@ -1,0 +1,11 @@
+meta {
+  name: Metrics-http.server.requests
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{BASE_URL}}/actuator/metrics/http.server.requests
+  body: json
+  auth: inherit
+}

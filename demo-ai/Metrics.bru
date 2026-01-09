@@ -1,0 +1,11 @@
+meta {
+  name: Metrics
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{BASE_URL}}/actuator/metrics
+  body: json
+  auth: inherit
+}

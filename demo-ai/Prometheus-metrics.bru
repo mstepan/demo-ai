@@ -1,0 +1,11 @@
+meta {
+  name: Prometheus-metrics
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{BASE_URL}}/actuator/prometheus
+  body: json
+  auth: inherit
+}
