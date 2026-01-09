@@ -1,5 +1,7 @@
 package com.github.mstepan.demo_ai.web;
 
+import com.github.mstepan.demo_ai.domain.Answer;
+import com.github.mstepan.demo_ai.domain.Question;
 import com.github.mstepan.demo_ai.service.ChatService;
 
 import org.springframework.http.MediaType;

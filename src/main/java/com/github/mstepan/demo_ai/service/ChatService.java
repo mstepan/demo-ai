@@ -1,8 +1,11 @@
 package com.github.mstepan.demo_ai.service;
 
-import com.github.mstepan.demo_ai.evaluators.AnswerNotRelevantException;
-import com.github.mstepan.demo_ai.web.Answer;
-import com.github.mstepan.demo_ai.web.Question;
+import com.github.mstepan.demo_ai.domain.Answer;
+import com.github.mstepan.demo_ai.domain.AnswerNotRelevantException;
+import com.github.mstepan.demo_ai.domain.Question;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,8 +22,6 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
 import reactor.core.publisher.Flux;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 
 import java.lang.invoke.MethodHandles;
 

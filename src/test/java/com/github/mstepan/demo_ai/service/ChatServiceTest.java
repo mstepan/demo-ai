@@ -6,8 +6,8 @@ import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
-import com.github.mstepan.demo_ai.web.Answer;
-import com.github.mstepan.demo_ai.web.Question;
+import com.github.mstepan.demo_ai.domain.Answer;
+import com.github.mstepan.demo_ai.domain.Question;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;

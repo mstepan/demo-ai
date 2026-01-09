@@ -1,4 +1,4 @@
-package com.github.mstepan.demo_ai.web;
+package com.github.mstepan.demo_ai.domain;
 
 import jakarta.validation.constraints.NotBlank;
 

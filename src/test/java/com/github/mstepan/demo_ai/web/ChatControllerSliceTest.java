@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.mstepan.demo_ai.domain.Answer;
+import com.github.mstepan.demo_ai.domain.Question;
 import com.github.mstepan.demo_ai.service.ChatService;
 
 import org.junit.jupiter.api.Test;

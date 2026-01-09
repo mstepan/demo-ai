@@ -3,7 +3,7 @@ package com.github.mstepan.demo_ai.service;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.mstepan.demo_ai.web.Question;
+import com.github.mstepan.demo_ai.domain.Question;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;

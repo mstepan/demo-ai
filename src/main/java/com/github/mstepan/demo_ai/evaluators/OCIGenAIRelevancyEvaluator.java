@@ -1,5 +1,7 @@
 package com.github.mstepan.demo_ai.evaluators;
 
+import com.github.mstepan.demo_ai.domain.EvaluationResult;
+
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.evaluation.EvaluationRequest;
 import org.springframework.ai.evaluation.Evaluator;

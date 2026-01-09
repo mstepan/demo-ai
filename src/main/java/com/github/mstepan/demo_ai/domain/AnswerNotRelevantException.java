@@ -1,4 +1,4 @@
-package com.github.mstepan.demo_ai.evaluators;
+package com.github.mstepan.demo_ai.domain;
 
 public final class AnswerNotRelevantException extends RuntimeException {
 

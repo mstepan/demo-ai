@@ -173,7 +173,7 @@ public class OCIChatModel implements ChatModel, StreamingChatModel {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    enum RequestDirection {
+    public enum RequestDirection {
         OUT_BOUND,
         IN_BOUND
     }

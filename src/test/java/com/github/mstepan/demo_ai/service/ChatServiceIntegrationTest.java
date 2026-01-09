@@ -2,7 +2,7 @@ package com.github.mstepan.demo_ai.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.github.mstepan.demo_ai.web.Question;
+import com.github.mstepan.demo_ai.domain.Question;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
