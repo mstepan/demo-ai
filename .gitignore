@@ -24,3 +24,6 @@ target/
 
 ### Oracle Code Assist ###
 .oca/
+
+### demo-ai e-2-e log files ###
+e2e-service.log
