@@ -12,6 +12,21 @@
 ./mvnw spring-boot:run
 ```
 
+## UI (Vaadin Chat)
+
+A simple ChatGPT-like UI is available at the root path.
+
+- Start the app: `./mvnw spring-boot:run`
+- Open http://localhost:7171/
+- Type a message and press Enter to send (Shift+Enter for newline)
+- Use the "Streaming" toggle (default ON) to stream responses incrementally
+- Use "Cancel" to stop an in-flight streaming response; partial content remains
+- Use "Clear" to reset the conversation (session-scoped; no persistence)
+
+First run notes: Vaadin dev tooling may download frontend resources which can take a minute.
+
+Known limitations: no auth, session-scoped history only.
+
 ## Testing
 
 * Execute unit and integration tests
