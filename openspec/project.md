@@ -19,7 +19,7 @@ This project demonstrates integrating Spring AI with a custom ChatModel backed b
   - Spring AI BOM 1.1.2
   - Custom ChatModel/StreamingChatModel that calls Oracle OCI Generative AI Inference API
 - Reactive: Project Reactor (Flux) for streaming responses
-- Testing: JUnit 5, Spring Boot Test, WireMock Spring Boot 3.10.6, Mockito, Spring MVC slice tests (@WebMvcTest + MockMvc)
+- Testing: JUnit 5, Spring Boot Test, WireMock Spring Boot 3.10.6, Mockito, Spring MVC slice tests (@WebMvcTest + MockMvc), k6 e2e tests (e2e-tests)
 - Tooling: OCI CLI for session authentication to OCI
 - Logging: SLF4J + structured debug logging of LLM requests/responses (when DEBUG enabled)
 - Config format: application.yaml + @ConfigurationProperties
@@ -87,6 +87,18 @@ This project demonstrates integrating Spring AI with a custom ChatModel backed b
   - Add streaming contract tests to assert NDJSON framing and backpressure behavior
   - Add negative tests around evaluator returning NO and retry behavior
   - Validate @ConfigurationProperties constraints with dedicated tests
+
+- End-to-end tests (k6):
+  - Location: e2e-tests/; framework: k6
+  - Scripts: ask.test.js — tests POST /ask (JSON); ask-stream.test.js — tests POST /ask/stream (NDJSON streaming)
+  - Prerequisites: service running and reachable (default http://localhost:7171), k6 installed, OCI Session Token for live calls; override base URL via the BASE_URL environment variable
+  - Run examples:
+    - k6 run -e BASE_URL=http://localhost:7171 e2e-tests/ask.test.js
+    - k6 run -e BASE_URL=http://localhost:7171 e2e-tests/ask-stream.test.js
+  - Thresholds and checks:
+    - Common threshold: http_req_failed rate==0
+    - ask: http_req_duration p(95)<15000; expects HTTP 200, application/json, and a non-empty "answer" field
+    - ask-stream: http_req_duration p(95)<5000; expects HTTP 200, application/x-ndjson (or application/ndjson), at least one line; each line parses as a JSON string; combined text is non-empty
 
 ### Git Workflow
 - Remote: origin https://github.com/mstepan/demo-ai.git
