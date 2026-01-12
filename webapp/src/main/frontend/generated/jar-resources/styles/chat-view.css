@@ -1,0 +1,4 @@
+/* Minimal style placeholder to keep ChatView styling available */
+:host {
+  --bubble-max-width: 72ch;
+}
