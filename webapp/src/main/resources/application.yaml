@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: demo-ai-webapp
+
+server:
+  port: 7170
+
+webapp:
+  api:
+    base-url: http://localhost:7171

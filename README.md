@@ -4,20 +4,36 @@
 
 ## Building and Running
 
-```bash
-./mvnw clean package
-```
+Multi-module project layout:
+
+- rest-api (port 7171): Spring Boot REST service exposing /ask and /ask/stream
+- webapp (port 7170): Vaadin UI that calls the REST API over HTTP
+
+Build all modules:
 
 ```bash
-./mvnw spring-boot:run
+./mvnw -T1C clean verify
 ```
+
+Run modules independently (in separate terminals):
+
+```bash
+# REST API on 7171
+./mvnw -pl rest-api spring-boot:run
+
+# Web UI on 7170
+./mvnw -pl webapp spring-boot:run
+```
+
+On Windows, use `mvnw.cmd` instead of `./mvnw`.
 
 ## UI (Vaadin Chat)
 
-A simple ChatGPT-like UI is available at the root path.
+A simple ChatGPT-like UI is available at the webapp root path and calls the REST API.
 
-- Start the app: `./mvnw spring-boot:run`
-- Open http://localhost:7171/
+- Start REST API: `./mvnw -pl rest-api spring-boot:run` (default http://localhost:7171)
+- Start Web UI: `./mvnw -pl webapp spring-boot:run` (default http://localhost:7170)
+- Open http://localhost:7170/
 - Type a message and press Enter to send (Shift+Enter for newline)
 - Use the "Streaming" toggle (default ON) to stream responses incrementally
 - Use "Cancel" to stop an in-flight streaming response; partial content remains
