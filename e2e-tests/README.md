@@ -32,8 +32,7 @@ Use the k6 `-e` flag to pass BASE_URL (recommended for cross-platform):
   k6 run -e BASE_URL=http://localhost:7171 e2e-tests/ask-stream.test.js
 
 - Run /ping test:
-  k6 run --vus 10 --duration 30s --summary-trend-stats="med,p(95),p(99)" -e BASE_URL=http://localhost:7171
-  e2e-tests/ping.test.js
+  k6 run --vus 10 --duration 60s -e BASE_URL=http://localhost:7171 e2e-tests/ping.test.js
 
 Both tests include basic thresholds and assertions:
 

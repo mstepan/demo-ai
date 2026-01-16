@@ -1,50 +1,69 @@
 package com.github.mstepan.demo_ai.web;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.lang.invoke.MethodHandles;
 import java.time.Duration;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class RateLimiter {
-
-    private static final Logger LOGGER =
-            LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+public final class RateLimiter implements AutoCloseable {
 
     private final int permissionsCount;
 
-    private final Duration timeWindow;
-
     private final AtomicInteger leftTokens;
+
+    private ScheduledExecutorService scheduledExecutor;
 
     public static RateLimiter create(int permissionsCount, Duration timeWindow) {
         RateLimiter limiter = new RateLimiter(permissionsCount, timeWindow);
-        Thread bucketRefillerThread =
-                Thread.ofVirtual()
-                        .start(
-                                () -> {
-                                    LOGGER.info(
-                                            "Refiller thread started with sleep duration {}",
-                                            limiter.timeWindow);
 
-                                    while (!Thread.currentThread().isInterrupted()) {
-                                        try {
-                                            Thread.sleep(limiter.timeWindow);
-                                            limiter.refill();
-                                        } catch (InterruptedException interEx) {
-                                            Thread.currentThread().interrupt();
-                                        }
-                                    }
-                                });
-        bucketRefillerThread.setName("Bucket-Refiller-Thread");
+        ScheduledExecutorService scheduledExecutor =
+                Executors.newSingleThreadScheduledExecutor(
+                        runnable -> {
+                            Thread thread = new Thread(runnable, "Bucket-Refiller-Thread");
+                            thread.setDaemon(true);
+                            return thread;
+                        });
+        scheduledExecutor.scheduleAtFixedRate(
+                limiter::refill, 0L, timeWindow.toMillis(), TimeUnit.MILLISECONDS);
+
+        limiter.scheduledExecutor = scheduledExecutor;
+
+        //        Thread bucketRefillerThread =
+        //                Thread.ofVirtual().name("Bucket-Refiller-Thread")
+        //                        .start(
+        //                                () -> {
+        //                                    LOGGER.info(
+        //                                            "Refiller thread started with sleep duration
+        // {}",
+        //                                            limiter.timeWindow);
+        //
+        //                                    while (!Thread.currentThread().isInterrupted()) {
+        //                                        try {
+        //                                            Thread.sleep(limiter.timeWindow);
+        //                                            limiter.refill();
+        //                                        } catch (InterruptedException interEx) {
+        //                                            Thread.currentThread().interrupt();
+        //                                        }
+        //                                    }
+        //                                });
 
         return limiter;
     }
 
+    @Override
+    public void close() {
+        this.scheduledExecutor.shutdown();
+    }
+
     public RateLimiter(int permissionsCount, Duration timeWindow) {
+        if (permissionsCount <= 0) {
+            throw new IllegalArgumentException("permissionsCount must be greater than 0");
+        }
+        if (timeWindow == null) {
+            throw new IllegalArgumentException("timeWindow cannot be null");
+        }
         this.permissionsCount = permissionsCount;
-        this.timeWindow = timeWindow;
         this.leftTokens = new AtomicInteger(permissionsCount);
     }
 

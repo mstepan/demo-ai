@@ -13,9 +13,9 @@ public class PingController {
 
     public PingController() {
         //
-        // http_200_reqs RPS: 34.09 req/s (count=1023, duration=30.01s)
+        // http_200_reqs RPS: 10.17 req/s (count=610, duration=60.00s)
         //
-        rateLimiter = RateLimiter.create(33, Duration.ofSeconds(1));
+        rateLimiter = RateLimiter.create(10, Duration.ofSeconds(1));
     }
 
     @GetMapping(produces = MediaType.TEXT_PLAIN_VALUE)
