@@ -1,5 +1,7 @@
 package com.github.mstepan.demo_ai.web;
 
+import com.github.mstepan.demo_ai.rate.RateLimitExceededException;
+
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;

@@ -1,5 +1,8 @@
 package com.github.mstepan.demo_ai.web;
 
+import com.github.mstepan.demo_ai.rate.RateLimitExceededException;
+import com.github.mstepan.demo_ai.rate.RateLimiter;
+
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 

@@ -1,4 +1,4 @@
-package com.github.mstepan.demo_ai.web;
+package com.github.mstepan.demo_ai.rate;
 
 import java.time.Duration;
 import java.util.concurrent.Executors;
@@ -29,25 +29,6 @@ public final class RateLimiter implements AutoCloseable {
 
         limiter.scheduledExecutor = scheduledExecutor;
 
-        //        Thread bucketRefillerThread =
-        //                Thread.ofVirtual().name("Bucket-Refiller-Thread")
-        //                        .start(
-        //                                () -> {
-        //                                    LOGGER.info(
-        //                                            "Refiller thread started with sleep duration
-        // {}",
-        //                                            limiter.timeWindow);
-        //
-        //                                    while (!Thread.currentThread().isInterrupted()) {
-        //                                        try {
-        //                                            Thread.sleep(limiter.timeWindow);
-        //                                            limiter.refill();
-        //                                        } catch (InterruptedException interEx) {
-        //                                            Thread.currentThread().interrupt();
-        //                                        }
-        //                                    }
-        //                                });
-
         return limiter;
     }
 
@@ -56,7 +37,7 @@ public final class RateLimiter implements AutoCloseable {
         this.scheduledExecutor.shutdown();
     }
 
-    public RateLimiter(int permissionsCount, Duration timeWindow) {
+    private RateLimiter(int permissionsCount, Duration timeWindow) {
         if (permissionsCount <= 0) {
             throw new IllegalArgumentException("permissionsCount must be greater than 0");
         }
