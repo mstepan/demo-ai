@@ -36,7 +36,7 @@ public class ExceptionHandlerAdvice {
 
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
     @ExceptionHandler(RateLimitExceededException.class)
-    public String handleRateLimit() {
+    public String handleRateLimitException() {
         return "Rate limit exceeded";
     }
 }
