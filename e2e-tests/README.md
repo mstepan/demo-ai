@@ -15,7 +15,12 @@ This folder contains k6 e2e tests for the REST API.
 
 ## Run
 
-To run e2e tests you need to start the demo-ai service and also obtain OCI SessionToken. You can use `run-tests.sh`
+To run e2e tests you need to start the demo-ai service and also obtain OCI SessionToken. You can use
+
+```bash 
+./run-e2e-tests.sh
+``` 
+
 script for execute e2e tests.
 
 Use the k6 `-e` flag to pass BASE_URL (recommended for cross-platform):

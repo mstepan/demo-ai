@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-# Run OCI auth, start Spring Boot app, execute k6 tests, then shut the app down
-# Requirements: bash, OCI CLI (oci), curl, k6, Java, Maven Wrapper (./mvnw)
-# Usage (Windows via Git Bash or WSL/mac/Linux):
-#   bash run-tests.sh
-
 set -Eeuo pipefail
 
 SERVICE_PID=""
@@ -65,14 +60,22 @@ main() {
     exit 1
   fi
 
-  # 1) Authenticate OCI session (may be interactive and open a browser)
-  log "Authenticating OCI session (profile: bmc_operator_access, region: us-ashburn-1)"
-  oci session authenticate --region us-ashburn-1 --profile-name bmc_operator_access
+  # 1) Ask whether to reuse existing OCI session token (default: reuse)
+  local auth_choice="Y"
+  if IFS= read -r -p "Reuse existing OCI session token? [Y/n]: " auth_choice_input; then
+    auth_choice="${auth_choice_input:-Y}"
+  fi
+  if [[ "$auth_choice" =~ ^[Nn] ]]; then
+    log "Authenticating OCI session (NEW token; profile: bmc_operator_access, region: us-ashburn-1)"
+    oci session authenticate --region us-ashburn-1 --profile-name bmc_operator_access
+  else
+    log "Reusing existing OCI session token (skipping 'oci session authenticate')"
+  fi
 
   # 2) Start Spring Boot service
   log "Starting Spring Boot service via Maven Wrapper"
   # Use quiet logs to keep output focused; full logs in service.log
-  ./mvnw -q spring-boot:run > e2e-service.log 2>&1 &
+  ./mvnw -q -pl rest-api spring-boot:run > e2e-service.log 2>&1 &
   SERVICE_PID=$!
   log "Service started (PID: $SERVICE_PID). Tailing logs at e2e-service.log"
 
