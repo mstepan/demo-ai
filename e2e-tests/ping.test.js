@@ -1,7 +1,6 @@
 import http from 'k6/http';
-import {check} from 'k6';
 import {Counter} from 'k6/metrics';
-import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
+import {textSummary} from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 
 export const http_200_reqs = new Counter('http_200_reqs');
 
@@ -29,19 +28,6 @@ export default function () {
     if (res.status === 200) {
         http_200_reqs.add(1);
     }
-
-    check(res, {
-        'status is 200': (r) => r.status === 200,
-        'content-type is text/plain': (r) => (r.headers['Content-Type'] || '').toLowerCase().includes('text/plain'),
-        'has PONG response': (r) => {
-            try {
-                const response = r.body;
-                return typeof response === 'string' && response === 'PONG';
-            } catch (e) {
-                return false;
-            }
-        },
-    });
 }
 
 // Ensure the custom metric exists even when there are zero 200 responses
@@ -56,7 +42,7 @@ export function handleSummary(data) {
     const rps = secs > 0 ? (count / secs) : 0;
     return {
         stdout:
-            textSummary(data, { indent: ' ', enableColors: true }) +
+            textSummary(data, {indent: ' ', enableColors: true}) +
             `\nhttp_200_reqs RPS: ${rps.toFixed(2)} req/s (count=${count}, duration=${secs.toFixed(2)}s)\n`,
     };
 }

@@ -1,29 +1,28 @@
 package com.github.mstepan.demo_ai.rate;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component
-public final class TokenBucketRateLimiter implements AutoCloseable {
+@Qualifier("tokenBucketRateLimiter")
+public final class TokenBucketRateLimiter implements RateLimiter {
 
     private final int permissionsCount;
     private final Duration timeWindow;
 
-    private final AtomicInteger availablePermits = new AtomicInteger();
+    private final AtomicReference<LimiterState> state;
 
-    private volatile ScheduledExecutorService scheduledExecutor;
+    record LimiterState(long lastRefillTime, int availablePermits) {}
 
+    //
+    // http_200_reqs RPS: 33.00 req/s (count=1980, duration=60.00s)
+    //
     public TokenBucketRateLimiter(
-            @Value("${rate-limiter.permissions:10}") int permissionsCount,
+            @Value("${rate-limiter.permissions:33}") int permissionsCount,
             @Value("${rate-limiter.window:1s}") Duration timeWindow) {
         if (permissionsCount <= 0) {
             throw new IllegalArgumentException("'permissionsCount' must be greater than 0");
@@ -34,54 +33,40 @@ public final class TokenBucketRateLimiter implements AutoCloseable {
 
         this.permissionsCount = permissionsCount;
         this.timeWindow = timeWindow;
-        this.availablePermits.set(permissionsCount);
-    }
-
-    @PostConstruct
-    void init() {
-        ScheduledExecutorService executor =
-                Executors.newSingleThreadScheduledExecutor(
-                        runnable -> {
-                            Thread thread = new Thread(runnable, "Bucket-Refiller-Thread");
-                            thread.setDaemon(true);
-                            return thread;
-                        });
-        executor.scheduleAtFixedRate(
-                this::refill, timeWindow.toMillis(), timeWindow.toMillis(), TimeUnit.MILLISECONDS);
-        this.scheduledExecutor = executor;
-    }
-
-    @PreDestroy
-    void onShutdown() {
-        close();
+        this.state = new AtomicReference<>(new LimiterState(System.nanoTime(), permissionsCount));
     }
 
     @Override
-    public void close() {
-        if (this.scheduledExecutor != null) {
-            this.scheduledExecutor.shutdown();
-            try {
-                this.scheduledExecutor.awaitTermination(1L, TimeUnit.SECONDS);
-            } catch (InterruptedException interEx) {
-                Thread.currentThread().interrupt();
-                this.scheduledExecutor.shutdownNow();
-            }
-        }
-    }
-
     public boolean acquire() {
+        checkIfRefillNeeded();
+
         while (true) {
-            final int currentTokens = availablePermits.get();
-            if (currentTokens <= 0) {
+            final LimiterState curState = state.get();
+            if (curState.availablePermits <= 0) {
                 return false;
             }
-            if (availablePermits.compareAndSet(currentTokens, currentTokens - 1)) {
+            if (state.compareAndSet(
+                    curState,
+                    new LimiterState(curState.lastRefillTime, curState.availablePermits - 1))) {
                 return true;
             }
         }
     }
 
-    void refill() {
-        availablePermits.set(permissionsCount);
+    void checkIfRefillNeeded() {
+        final long now = System.nanoTime();
+
+        while (true) {
+
+            LimiterState curState = state.get();
+
+            if ((now - curState.lastRefillTime) >= timeWindow.toNanos()) {
+                if (state.compareAndSet(curState, new LimiterState(now, permissionsCount))) {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
     }
 }

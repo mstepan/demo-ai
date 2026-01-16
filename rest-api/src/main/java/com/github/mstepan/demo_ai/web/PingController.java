@@ -1,8 +1,9 @@
 package com.github.mstepan.demo_ai.web;
 
 import com.github.mstepan.demo_ai.rate.RateLimitExceededException;
-import com.github.mstepan.demo_ai.rate.TokenBucketRateLimiter;
+import com.github.mstepan.demo_ai.rate.RateLimiter;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,9 +11,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/ping")
 public class PingController {
 
-    private final TokenBucketRateLimiter rateLimiter;
+    private final RateLimiter rateLimiter;
 
-    public PingController(TokenBucketRateLimiter tokenBucketRateLimiter) {
+    public PingController(@Qualifier("tokenBucketRateLimiter") RateLimiter tokenBucketRateLimiter) {
         this.rateLimiter = tokenBucketRateLimiter;
     }
 
