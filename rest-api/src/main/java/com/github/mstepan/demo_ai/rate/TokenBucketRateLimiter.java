@@ -41,7 +41,7 @@ public final class TokenBucketRateLimiter implements RateLimiter {
         checkIfRefillNeeded();
 
         while (true) {
-            final LimiterState curState = state.get();
+            LimiterState curState = state.get();
             if (curState.availablePermits <= 0) {
                 return false;
             }
@@ -50,6 +50,8 @@ public final class TokenBucketRateLimiter implements RateLimiter {
                     new LimiterState(curState.lastRefillTime, curState.availablePermits - 1))) {
                 return true;
             }
+
+            Thread.onSpinWait();
         }
     }
 
@@ -57,16 +59,16 @@ public final class TokenBucketRateLimiter implements RateLimiter {
         final long now = System.nanoTime();
 
         while (true) {
-
             LimiterState curState = state.get();
 
-            if ((now - curState.lastRefillTime) >= timeWindow.toNanos()) {
-                if (state.compareAndSet(curState, new LimiterState(now, permissionsCount))) {
-                    break;
-                }
-            } else {
+            if ((now - curState.lastRefillTime) < timeWindow.toNanos()) {
                 break;
             }
+            if (state.compareAndSet(curState, new LimiterState(now, permissionsCount))) {
+                break;
+            }
+
+            Thread.onSpinWait();
         }
     }
 }
