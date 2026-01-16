@@ -7,31 +7,34 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
-public final class RateLimiter implements AutoCloseable {
+public final class TokenBucketRateLimiter implements AutoCloseable {
 
     private final int permissionsCount;
     private final Duration timeWindow;
 
-    private final AtomicInteger leftTokens = new AtomicInteger();
+    private final AtomicInteger availablePermits = new AtomicInteger();
 
-    private ScheduledExecutorService scheduledExecutor;
+    private volatile ScheduledExecutorService scheduledExecutor;
 
-    public RateLimiter(
+    public TokenBucketRateLimiter(
             @Value("${rate-limiter.permissions:10}") int permissionsCount,
             @Value("${rate-limiter.window:1s}") Duration timeWindow) {
         if (permissionsCount <= 0) {
-            throw new IllegalArgumentException("permissionsCount must be greater than 0");
+            throw new IllegalArgumentException("'permissionsCount' must be greater than 0");
         }
+        if (timeWindow == null || timeWindow.toMillis() <= 0L) {
+            throw new IllegalArgumentException("'timeWindow' is null, or zero, or negative");
+        }
+
         this.permissionsCount = permissionsCount;
-        this.timeWindow = Objects.requireNonNull(timeWindow, "timeWindow cannot be null");
-        this.leftTokens.set(permissionsCount);
+        this.timeWindow = timeWindow;
+        this.availablePermits.set(permissionsCount);
     }
 
     @PostConstruct
@@ -43,7 +46,8 @@ public final class RateLimiter implements AutoCloseable {
                             thread.setDaemon(true);
                             return thread;
                         });
-        executor.scheduleAtFixedRate(this::refill, 0L, timeWindow.toMillis(), TimeUnit.MILLISECONDS);
+        executor.scheduleAtFixedRate(
+                this::refill, timeWindow.toMillis(), timeWindow.toMillis(), TimeUnit.MILLISECONDS);
         this.scheduledExecutor = executor;
     }
 
@@ -56,19 +60,28 @@ public final class RateLimiter implements AutoCloseable {
     public void close() {
         if (this.scheduledExecutor != null) {
             this.scheduledExecutor.shutdown();
+            try {
+                this.scheduledExecutor.awaitTermination(1L, TimeUnit.SECONDS);
+            } catch (InterruptedException interEx) {
+                Thread.currentThread().interrupt();
+                this.scheduledExecutor.shutdownNow();
+            }
         }
     }
 
     public boolean acquire() {
-        return leftTokens.decrementAndGet() >= 0;
+        while (true) {
+            final int currentTokens = availablePermits.get();
+            if (currentTokens <= 0) {
+                return false;
+            }
+            if (availablePermits.compareAndSet(currentTokens, currentTokens - 1)) {
+                return true;
+            }
+        }
     }
 
     void refill() {
-        while (true) {
-            int currentTokensCount = leftTokens.get();
-            if (leftTokens.compareAndSet(currentTokensCount, permissionsCount)) {
-                break;
-            }
-        }
+        availablePermits.set(permissionsCount);
     }
 }
