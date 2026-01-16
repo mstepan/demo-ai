@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.net.URI;
@@ -31,5 +32,11 @@ public class ExceptionHandlerAdvice {
 
         problemDetail.setProperty("invalid-params", validationMessages);
         return problemDetail;
+    }
+
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    @ExceptionHandler(RateLimitExceededException.class)
+    public String handleRateLimit() {
+        return "Rate limit exceeded";
     }
 }
