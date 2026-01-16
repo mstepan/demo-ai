@@ -1,51 +1,62 @@
 package com.github.mstepan.demo_ai.rate;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Component
 public final class RateLimiter implements AutoCloseable {
 
     private final int permissionsCount;
+    private final Duration timeWindow;
 
-    private final AtomicInteger leftTokens;
+    private final AtomicInteger leftTokens = new AtomicInteger();
 
     private ScheduledExecutorService scheduledExecutor;
 
-    public static RateLimiter create(int permissionsCount, Duration timeWindow) {
-        RateLimiter limiter = new RateLimiter(permissionsCount, timeWindow);
+    public RateLimiter(
+            @Value("${rate-limiter.permissions:10}") int permissionsCount,
+            @Value("${rate-limiter.window:1s}") Duration timeWindow) {
+        if (permissionsCount <= 0) {
+            throw new IllegalArgumentException("permissionsCount must be greater than 0");
+        }
+        this.permissionsCount = permissionsCount;
+        this.timeWindow = Objects.requireNonNull(timeWindow, "timeWindow cannot be null");
+        this.leftTokens.set(permissionsCount);
+    }
 
-        ScheduledExecutorService scheduledExecutor =
+    @PostConstruct
+    void init() {
+        ScheduledExecutorService executor =
                 Executors.newSingleThreadScheduledExecutor(
                         runnable -> {
                             Thread thread = new Thread(runnable, "Bucket-Refiller-Thread");
                             thread.setDaemon(true);
                             return thread;
                         });
-        scheduledExecutor.scheduleAtFixedRate(
-                limiter::refill, 0L, timeWindow.toMillis(), TimeUnit.MILLISECONDS);
+        executor.scheduleAtFixedRate(this::refill, 0L, timeWindow.toMillis(), TimeUnit.MILLISECONDS);
+        this.scheduledExecutor = executor;
+    }
 
-        limiter.scheduledExecutor = scheduledExecutor;
-
-        return limiter;
+    @PreDestroy
+    void onShutdown() {
+        close();
     }
 
     @Override
     public void close() {
-        this.scheduledExecutor.shutdown();
-    }
-
-    private RateLimiter(int permissionsCount, Duration timeWindow) {
-        if (permissionsCount <= 0) {
-            throw new IllegalArgumentException("permissionsCount must be greater than 0");
+        if (this.scheduledExecutor != null) {
+            this.scheduledExecutor.shutdown();
         }
-        if (timeWindow == null) {
-            throw new IllegalArgumentException("timeWindow cannot be null");
-        }
-        this.permissionsCount = permissionsCount;
-        this.leftTokens = new AtomicInteger(permissionsCount);
     }
 
     public boolean acquire() {
