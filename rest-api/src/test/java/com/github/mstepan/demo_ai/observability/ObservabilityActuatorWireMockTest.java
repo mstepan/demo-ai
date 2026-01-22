@@ -54,6 +54,7 @@ class ObservabilityActuatorWireMockTest {
                 mapper.readTree(
                         relevanceEvaluationResponse.getContentAsString(StandardCharsets.UTF_8));
 
+        // WireMock interaction with OCI Gen AI service
         // Same two-call scenario as ChatServiceWireMockTest: generation then relevancy evaluation
         WireMock.stubFor(
                 WireMock.post("/20231130/actions/chat")
@@ -179,7 +180,8 @@ class ObservabilityActuatorWireMockTest {
 
         // Verify custom metrics via JSON metrics endpoint for stability
         ResponseEntity<String> successMetric =
-                rest.getForEntity("/actuator/metrics/app_oci_chat_success_total", String.class);
+                rest.getForEntity(
+                        "/actuator/metrics/app_oci_chat_total?tag=status:success", String.class);
         assertThat(successMetric.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(successMetric.getBody()).isNotNull();
 

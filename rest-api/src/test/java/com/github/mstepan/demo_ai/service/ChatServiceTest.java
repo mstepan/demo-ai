@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.github.mstepan.demo_ai.domain.Answer;
 import com.github.mstepan.demo_ai.domain.Question;
+import com.github.mstepan.demo_ai.metrics.RegisteredMetrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -85,6 +86,7 @@ class ChatServiceTest {
     void setUp() {
         // Ensure clean stubbing for each test
         reset(chatClient, evaluator);
+        meterRegistry.clear();
     }
 
     @Test
@@ -116,9 +118,10 @@ class ChatServiceTest {
         assertThat(answer.answer()).isEqualTo("The capital of France is Paris.");
 
         // Metrics: success counter should be incremented
-        var success = meterRegistry.find("app_oci_chat_success_total").counter();
+        var success =
+                meterRegistry.counter(RegisteredMetrics.API_OCI_CHAT_TOTAL, "status", "success");
         assertThat(success).isNotNull();
-        assertThat(success.count()).isGreaterThan(0.0);
+        assertThat(success.count()).isEqualTo(1.0);
     }
 
     @Test
@@ -155,10 +158,11 @@ class ChatServiceTest {
                         .tags("reason", "AnswerNotRelevantException")
                         .counter();
         assertThat(retries).isNotNull();
-        assertThat(retries.count()).isGreaterThan(0.0);
+        assertThat(retries.count()).isEqualTo(3.0);
 
         // Failures counter should also be incremented due to thrown runtime path before recovery
-        var failures = meterRegistry.find("app_oci_chat_failures_total").counter();
+        var failures =
+                meterRegistry.counter(RegisteredMetrics.API_OCI_CHAT_TOTAL, "status", "failed");
         assertThat(failures).isNotNull();
         assertThat(failures.count()).isGreaterThan(0.0);
     }
@@ -182,7 +186,8 @@ class ChatServiceTest {
         assertThat(answer).isNotNull();
         assertThat(answer.answer()).isEqualTo("No answer");
 
-        var failures = meterRegistry.find("app_oci_chat_failures_total").counter();
+        var failures =
+                meterRegistry.counter(RegisteredMetrics.API_OCI_CHAT_TOTAL, "status", "failed");
         assertThat(failures).isNotNull();
         assertThat(failures.count()).isGreaterThan(0.0);
     }
